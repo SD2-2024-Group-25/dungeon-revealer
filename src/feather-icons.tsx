@@ -978,3 +978,39 @@ export const Columns = createIcon({
     />
   ),
 });
+
+export const Drawing = createIcon({
+  displayName: "Drawing",
+  viewBox: "0 0 24 24",
+  path: (
+    <>
+      {/* Paper */}
+      <rect
+        x={3}
+        y={3}
+        width={18}
+        height={18}
+        rx={2}
+        ry={2}
+        stroke="currentColor"
+      />
+
+      {/* Pencil */}
+      <path
+        d="M15 11l4-4M15 11l-1 4 4-1M18.5 6.5L15 11"
+        stroke="currentColor"
+      />
+
+      {/* Pencil tip */}
+      <path d="M19.5 4.5l-1-1L17 5l1 1z" stroke="currentColor" />
+    </>
+  ),
+  defaultProps: {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    boxSize: "30px",
+  },
+});

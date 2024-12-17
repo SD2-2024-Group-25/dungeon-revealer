@@ -1,4 +1,6 @@
 import * as React from "react";
+// At the top of your PlayerMap component file
+import ExcalidrawWrapper from "./ExcalidrawWrapper";
 import useAsyncEffect from "@n1ru4l/use-async-effect";
 import { ReactRelayContext, useMutation, useQuery } from "relay-hooks";
 import graphql from "babel-plugin-relay/macro";
@@ -77,10 +79,14 @@ const PlayerMap = ({
   fetch,
   socket,
   isMapOnly,
+  isCollaborating, // Add this
+  setIsCollaborating, // Add this
 }: {
   fetch: typeof window.fetch;
   socket: ReturnType<typeof useSocket>;
   isMapOnly: boolean;
+  isCollaborating: boolean; // Add this
+  setIsCollaborating: React.Dispatch<React.SetStateAction<boolean>>; // Add this
 }) => {
   const currentMap = useQuery<playerArea_PlayerMap_ActiveMapQuery>(
     PlayerMap_ActiveMapQuery
@@ -98,7 +104,7 @@ const PlayerMap = ({
       ev.preventDefault();
     };
     return () => {
-      window.addEventListener("contextmenu", contextmenuListener);
+      window.removeEventListener("contextmenu", contextmenuListener);
       window.removeEventListener("contextmenu", contextmenuListener);
     };
   }, []);
@@ -187,7 +193,9 @@ const PlayerMap = ({
       },
     }
   );
+
   const noteWindowActions = useNoteWindowActions();
+  const [isExcalidrawOpen, setIsExcalidrawOpen] = React.useState(false);
   return (
     <>
       <div
@@ -249,6 +257,20 @@ const PlayerMap = ({
           ) : null}
         </FlatContextProvider>
       </div>
+
+      {/* Conditionally render ExcalidrawWrapper */}
+      {isExcalidrawOpen && (
+        <ExcalidrawWrapper
+          onClose={() => {
+            setIsExcalidrawOpen(false);
+            setIsCollaborating(false);
+          }}
+          isCollaborating={isCollaborating}
+          setIsCollaborating={setIsCollaborating}
+          socket={socket} // Pass the socket
+        />
+      )}
+
       {!showSplashScreen ? (
         isMapOnly ? null : (
           <>
@@ -327,6 +349,17 @@ const PlayerMap = ({
                           <Icon.Label>Notes</Icon.Label>
                         </Toolbar.LongPressButton>
                       </Toolbar.Item>
+                      <Toolbar.Item isActive>
+                        <Toolbar.LongPressButton
+                          onClick={() => {
+                            setIsExcalidrawOpen(true);
+                            setIsCollaborating(false); // Reset collaboration state
+                          }}
+                        >
+                          <Icon.Drawing boxSize="20px" />
+                          <Icon.Label>Draw</Icon.Label>
+                        </Toolbar.LongPressButton>
+                      </Toolbar.Item>
                     </Toolbar.Group>
                   </React.Fragment>
                 ) : null}
@@ -363,6 +396,8 @@ const AuthenticatedContent: React.FC<{
   pcPassword: string;
   localFetch: typeof fetch;
   isMapOnly: boolean;
+  isCollaborating: boolean; // Add this
+  setIsCollaborating: React.Dispatch<React.SetStateAction<boolean>>; // Add this
 }> = (props) => {
   const socket = useSocket();
 
@@ -377,6 +412,8 @@ const AuthenticatedContent: React.FC<{
         fetch={props.localFetch}
         socket={socket}
         isMapOnly={props.isMapOnly}
+        isCollaborating={props.isCollaborating} // Pass down as prop
+        setIsCollaborating={props.setIsCollaborating} // Pass down as prop
       />
     </AuthenticatedAppShell>
   );
@@ -395,7 +432,7 @@ export const PlayerArea: React.FC<{
   }
 
   const [mode, setMode] = React.useState("LOADING");
-
+  const [isCollaborating, setIsCollaborating] = React.useState(false); // Add these
   const localFetch = React.useCallback(
     (input, init = {}) => {
       return fetch(buildApiUrl(input), {
@@ -449,6 +486,8 @@ export const PlayerArea: React.FC<{
         localFetch={localFetch}
         pcPassword={usedPassword}
         isMapOnly={props.isMapOnly}
+        isCollaborating={isCollaborating} // Pass as prop
+        setIsCollaborating={setIsCollaborating} // Pass setter as prop
       />
     );
   }
