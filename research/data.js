@@ -15,6 +15,7 @@ const readdir = promisify(fs.readdir);
 // Define paths
 const basePath = path.resolve(__dirname, "..");
 const settingsPath = path.join(basePath, "data", "settings.json");
+const researchSettingsPath = path.join(basePath, "research", "settings.json");
 const downloadsFolder = path.join(basePath, "research", "downloads");
 
 // Function to update settings.json in the destination folder
@@ -31,6 +32,29 @@ async function updateSettings(destinationSettingsPath, newId) {
     console.log(`Updated 'id' in settings.json to: ${newId}`);
   } catch (err) {
     console.error(`Error updating settings.json: ${err.message}`, err);
+  }
+}
+
+// Function to update research/settings.json with new session folder name
+async function updateResearchSettings(sessionFolderName) {
+  try {
+    const data = JSON.parse(fs.readFileSync(researchSettingsPath, "utf-8"));
+    if (!Array.isArray(data.downloads)) {
+      data.downloads = [];
+    }
+
+    data.downloads.push(sessionFolderName);
+
+    fs.writeFileSync(
+      researchSettingsPath,
+      JSON.stringify(data, null, 2),
+      "utf-8"
+    );
+    console.log(
+      `Added '${sessionFolderName}' to 'downloads' in research/settings.json`
+    );
+  } catch (err) {
+    console.error(`Error updating research/settings.json: ${err.message}`, err);
   }
 }
 
@@ -57,20 +81,12 @@ async function copyFolder(
   instanceTimestamp
 ) {
   try {
-    // Check if the source folder exists
-    const sourceStat = await stat(source);
-    if (!sourceStat.isDirectory()) {
-      console.error(`Source is not a directory: ${source}`);
-      return;
-    }
-
     const destinationFolderName = `${instanceNumber}_instance_${instanceTimestamp}`;
     const destination = path.join(destinationBase, destinationFolderName);
 
     // Ensure the destination folder exists
     await mkdir(destination, { recursive: true });
 
-    // Copy files and folders
     const items = await readdir(source);
     for (const item of items) {
       const sourceItem = path.join(source, item);
@@ -83,13 +99,12 @@ async function copyFolder(
           destination,
           instanceNumber,
           instanceTimestamp
-        ); // Recursively copy subfolders
+        );
       } else {
-        await copyFile(sourceItem, destinationItem); // Copy files
+        await copyFile(sourceItem, destinationItem);
       }
     }
 
-    // Update settings.json in the new folder with the folder name as the id
     const destinationSettingsPath = path.join(destination, "settings.json");
     await updateSettings(destinationSettingsPath, destinationFolderName);
 
@@ -138,8 +153,11 @@ function watchSettingsFile(sourceSettingsPath, sourceFolder, destinationBase) {
     const sourceFolder = path.join(basePath, "data", "maps", currentMapId);
     const sourceSettingsPath = path.join(sourceFolder, "settings.json");
 
+    // Update research settings with the session folder name
+    await updateResearchSettings(`Session_${timestamp}`);
+
     // Initial copy
-    await copyFolder(sourceFolder, sessionFolder, 1, timestamp);
+    await copyFolder(sourceFolder, sessionFolder, 0, timestamp);
     watchSettingsFile(sourceSettingsPath, sourceFolder, sessionFolder);
   } catch (err) {
     console.error(`Error: ${err.message}`, err);
