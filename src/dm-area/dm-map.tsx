@@ -1,4 +1,5 @@
 import * as React from "react";
+import { CSSProperties } from "react";
 import styled from "@emotion/styled/macro";
 import * as io from "io-ts";
 import { pipe, identity } from "fp-ts/function";
@@ -258,6 +259,26 @@ const MapUpdateGridMutation = graphql`
     }
   }
 `;
+
+interface ModalProps {
+  show: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+const Modal: React.FC<ModalProps> = ({ show, onClose, children }) => {
+  if (!show) return null;
+
+  return (
+    <div style={modalOverlayStyle}>
+      <div style={modalStyle}>
+        <h2>Session Download</h2>
+        <p>{children}</p>
+        <button onClick={onClose}>Close</button>
+      </div>
+    </div>
+  );
+};
 
 const ShowGridSettingsPopup = React.memo(
   (props: {
@@ -723,6 +744,17 @@ export const DmMap = (props: {
 
   const [confirmDialogNode, showDialog] = useConfirmationDialog();
 
+  const [isModalVisible, setModalVisible] = React.useState(false);
+
+  const openModal = () => {
+    console.log("This is a test");
+    setModalVisible(true); // Show the modal
+  };
+
+  const closeModal = () => {
+    setModalVisible(false); // Hide the modal
+  };
+
   const [configureGridMapToolState, setConfigureGridMapToolState] =
     useResetState<ConfigureMapToolState>(
       () => ({
@@ -932,6 +964,18 @@ export const DmMap = (props: {
                   </Toolbar.Button>
                 </Toolbar.Item>
                 <Toolbar.Item isActive>
+                  <Toolbar.Button onClick={openModal}>
+                    <Icon.Map boxSize="20px" />
+                    <Icon.Label>Download Session</Icon.Label>
+                  </Toolbar.Button>
+                </Toolbar.Item>
+
+                {/* Modal Component */}
+                <Modal show={isModalVisible} onClose={closeModal}>
+                  This is the session download modal. You can change this text
+                  later.
+                </Modal>
+                <Toolbar.Item isActive>
                   <Toolbar.Button
                     onClick={() => {
                       props.openMediaLibrary();
@@ -1042,6 +1086,26 @@ export const DmMap = (props: {
       <ContextMenuRenderer map={map} />
     </FlatContextProvider>
   );
+};
+
+const modalOverlayStyle: CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+};
+
+const modalStyle: CSSProperties = {
+  background: "white",
+  padding: "20px",
+  borderRadius: "8px",
+  textAlign: "center",
+  width: "300px",
 };
 
 const LeftToolbarContainer = styled.div`
