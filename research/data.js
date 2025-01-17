@@ -46,9 +46,6 @@ async function updateResearchSettings(sessionFolderName) {
       JSON.stringify(data, null, 2),
       "utf-8"
     );
-    console.log(
-      `Added '${sessionFolderName}' to 'downloads' in research/settings.json`
-    );
   } catch (err) {
     console.error(`Error updating research/settings.json: ${err.message}`, err);
   }
@@ -71,8 +68,6 @@ async function copyFolder(source, destination) {
         await copyFile(sourceItem, destinationItem);
       }
     }
-
-    console.log(`Copied data from ${source} to ${destination}`);
   } catch (err) {
     console.error(`Error copying folder: ${err.message}`);
   }
@@ -89,7 +84,6 @@ async function updateIterationSettings(iterationSettingsPath, newId) {
       JSON.stringify(data, null, 2),
       "utf-8"
     );
-    console.log(`Updated 'id' in settings.json to: ${newId}`);
   } catch (err) {
     console.error(`Error updating settings.json: ${err.message}`, err);
   }
@@ -104,9 +98,6 @@ async function handleMapSettingsChange(
   const iterationFolder = path.join(
     sessionBaseFolder,
     `Iteration_${instanceCounter}`
-  );
-  console.log(
-    `Detected change in map settings. Creating iteration: ${iterationFolder}`
   );
 
   // Copy the folder contents
@@ -133,8 +124,6 @@ function startWatchingMapSettings(currentMapId) {
   // Create the session base folder
   mkdir(sessionBaseFolder, { recursive: true })
     .then(async () => {
-      console.log(`Created session base folder: ${sessionBaseFolder}`);
-
       // Update research/settings.json with the new session folder name
       await updateResearchSettings(path.basename(sessionBaseFolder));
 
@@ -172,7 +161,6 @@ function startWatchingMapSettings(currentMapId) {
 // Function to stop watching the map-specific settings file
 function stopWatchingMapSettings() {
   if (isWatchingMapSettings && mapSettingsWatcher) {
-    console.log("Stopping watching map-specific settings.json...");
     mapSettingsWatcher.close();
     mapSettingsWatcher = null;
     isWatchingMapSettings = false;
@@ -185,7 +173,6 @@ function watchMainSettingsFile() {
 
   fs.watch(settingsPath, async (eventType) => {
     if (eventType === "change") {
-      console.log("Detected changes in main settings.json...");
       try {
         const mainSettings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
         const currentMapId = mainSettings.currentMapId;
@@ -208,8 +195,6 @@ function watchMainSettingsFile() {
       }
     }
   });
-
-  console.log(`Watching main settings file: ${settingsPath}`);
 }
 
 // Initialize the script
