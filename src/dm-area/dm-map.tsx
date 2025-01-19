@@ -96,6 +96,8 @@ import { dmMap_MapPingMutation } from "./__generated__/dmMap_MapPingMutation.gra
 import { UpdateTokenContext } from "../update-token-context";
 import { IsDungeonMasterContext } from "../is-dungeon-master-context";
 import { LazyLoadedMapView } from "../lazy-loaded-map-view";
+import * as fs from "fs";
+import * as path from "path";
 
 type ToolMapRecord = {
   name: string;
@@ -263,18 +265,36 @@ const MapUpdateGridMutation = graphql`
 interface ModalProps {
   show: boolean;
   onClose: () => void;
-  children: React.ReactNode;
+  sessions: string[];
 }
 
-const Modal: React.FC<ModalProps> = ({ show, onClose, children }) => {
+const Modal: React.FC<ModalProps> = ({ show, onClose, sessions }) => {
+  const handleDownloadClick = (session: string) => {
+    console.log(`Downloading: ${session}`);
+    // Add any download logic here.
+  };
+
   if (!show) return null;
 
   return (
     <div style={modalOverlayStyle}>
       <div style={modalStyle}>
-        <h2>Session Download</h2>
-        <p>{children}</p>
-        <button onClick={onClose}>Close</button>
+        <h2>Session Downloads</h2>
+        <p>Select a session to download</p>
+        <div>
+          {sessions.map((session, index) => (
+            <button
+              key={index}
+              onClick={() => handleDownloadClick(session)}
+              style={buttonStyle}
+            >
+              {session}
+            </button>
+          ))}
+        </div>
+        <button onClick={onClose} style={closeButtonStyle}>
+          Close
+        </button>
       </div>
     </div>
   );
@@ -745,14 +765,56 @@ export const DmMap = (props: {
   const [confirmDialogNode, showDialog] = useConfirmationDialog();
 
   const [isModalVisible, setModalVisible] = React.useState(false);
+  const [sessions, setSessions] = React.useState<string[]>([]);
 
   const openModal = () => {
-    console.log("This is a test");
-    setModalVisible(true); // Show the modal
+    fetchSessions(); // Fetch data every time the modal opens
+    setModalVisible(true);
   };
 
   const closeModal = () => {
-    setModalVisible(false); // Hide the modal
+    setModalVisible(false);
+  };
+
+  React.useEffect(() => {
+    const ws = new WebSocket("ws://localhost:8080");
+
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === "update") {
+        setSessions(message.downloads);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket connection closed.");
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, []);
+
+  const fetchSessions = async () => {
+    try {
+      const response = await fetch(
+        `/research/settings.json?timestamp=${Date.now()}`,
+        {
+          cache: "no-store",
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(data.downloads);
+      if (JSON.stringify(data.downloads) !== JSON.stringify(sessions)) {
+        setSessions(data.downloads || []);
+      }
+    } catch (error) {
+      console.error("Error fetching sessions:", error);
+    }
   };
 
   const [configureGridMapToolState, setConfigureGridMapToolState] =
@@ -971,10 +1033,11 @@ export const DmMap = (props: {
                 </Toolbar.Item>
 
                 {/* Modal Component */}
-                <Modal show={isModalVisible} onClose={closeModal}>
-                  This is the session download modal. You can change this text
-                  later.
-                </Modal>
+                <Modal
+                  show={isModalVisible}
+                  onClose={closeModal}
+                  sessions={sessions}
+                />
                 <Toolbar.Item isActive>
                   <Toolbar.Button
                     onClick={() => {
@@ -1088,7 +1151,7 @@ export const DmMap = (props: {
   );
 };
 
-const modalOverlayStyle: CSSProperties = {
+const modalOverlayStyle: React.CSSProperties = {
   position: "fixed",
   top: 0,
   left: 0,
@@ -1100,12 +1163,26 @@ const modalOverlayStyle: CSSProperties = {
   alignItems: "center",
 };
 
-const modalStyle: CSSProperties = {
+const modalStyle: React.CSSProperties = {
   background: "white",
   padding: "20px",
   borderRadius: "8px",
   textAlign: "center",
   width: "300px",
+};
+
+const buttonStyle: React.CSSProperties = {
+  margin: "5px 0",
+  padding: "10px 15px",
+  width: "100%",
+  textAlign: "center",
+  cursor: "pointer",
+};
+
+const closeButtonStyle: React.CSSProperties = {
+  marginTop: "20px",
+  padding: "10px 15px",
+  cursor: "pointer",
 };
 
 const LeftToolbarContainer = styled.div`

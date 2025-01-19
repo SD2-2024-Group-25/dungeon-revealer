@@ -23,8 +23,8 @@ server/version.ts
 data
 
 # Research Data Download/Upload #
-research/downloads
-research/uploads
+public/research/downloads
+public/research/uploads
 
 # Packages #
 ############

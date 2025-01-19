@@ -3,7 +3,7 @@ const path = require("path");
 const { mkdir, copyFile, readdir, stat } = require("fs/promises");
 
 const basePath = path.resolve(__dirname, "..");
-const settingsPath = path.join(basePath, "data", "settings.json");
+const settingsPath = path.join(basePath, "..", "data", "settings.json");
 const researchSettingsPath = path.join(basePath, "research", "settings.json");
 const downloadsFolder = path.join(basePath, "research", "downloads");
 let mapSettingsWatcher = null;
@@ -31,7 +31,7 @@ function getTimestamp() {
     .replace(/:/g, "-"); // Replace colons with dashes
 }
 
-// Function to update the research settings.json file
+// Modify the `updateResearchSettings` function to broadcast updates
 async function updateResearchSettings(sessionFolderName) {
   try {
     const data = JSON.parse(fs.readFileSync(researchSettingsPath, "utf-8"));
@@ -113,7 +113,7 @@ async function handleMapSettingsChange(
 
 // Function to start watching the map-specific settings file
 function startWatchingMapSettings(currentMapId) {
-  const mapFolder = path.join(basePath, "data", "maps", currentMapId);
+  const mapFolder = path.join(basePath, "..", "data", "maps", currentMapId);
   const mapSettingsPath = path.join(mapFolder, "settings.json");
   const sessionBaseFolder = path.join(
     downloadsFolder,
