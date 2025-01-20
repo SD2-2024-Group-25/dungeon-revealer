@@ -3,7 +3,7 @@ const path = require("path");
 const { mkdir, copyFile, readdir, stat } = require("fs/promises");
 
 const basePath = path.resolve(__dirname, "..");
-const settingsPath = path.join(basePath, "data", "settings.json");
+const settingsPath = path.join(basePath, "..", "data", "settings.json");
 const researchSettingsPath = path.join(basePath, "research", "settings.json");
 const downloadsFolder = path.join(basePath, "research", "downloads");
 let mapSettingsWatcher = null;
@@ -122,7 +122,7 @@ async function handleMapSettingsChange(
 
 // Function to start watching the map-specific settings file
 function startWatchingMapSettings(currentMapId) {
-  const mapFolder = path.join(basePath, "data", "maps", currentMapId);
+  const mapFolder = path.join(basePath, "..", "data", "maps", currentMapId);
   const mapSettingsPath = path.join(mapFolder, "settings.json");
   const sessionBaseFolder = path.join(
     downloadsFolder,

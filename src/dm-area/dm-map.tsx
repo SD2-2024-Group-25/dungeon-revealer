@@ -606,6 +606,100 @@ const DMMapFragment = graphql`
   }
 `;
 
+interface ModalProps {
+  show: boolean;
+  onClose: () => void;
+  sessions: string[];
+}
+
+const Modal: React.FC<ModalProps> = ({ show, onClose, sessions }) => {
+  const handleDownloadClick = async (session: string) => {
+    console.log(`Downloading: ${session}`);
+    try {
+      const response = await fetch(`/api/download-folder/${session}`);
+      if (!response.ok) {
+        throw new Error("Failed to download folder");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${session}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading folder:", error);
+      alert("Failed to download the folder. Please try again.");
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <div style={modalOverlayStyle}>
+      <div style={modalStyle}>
+        <h2>Session Downloads</h2>
+        <p>Select a session to download:</p>
+        <div>
+          {sessions.length > 0 ? (
+            sessions.map((session, index) => (
+              <button
+                key={index}
+                onClick={() => handleDownloadClick(session)}
+                style={buttonStyle}
+              >
+                {session}
+              </button>
+            ))
+          ) : (
+            <p>No sessions available for download.</p>
+          )}
+        </div>
+        <button onClick={onClose} style={closeButtonStyle}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const modalOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+};
+
+const modalStyle: React.CSSProperties = {
+  background: "white",
+  padding: "20px",
+  borderRadius: "8px",
+  textAlign: "center",
+  width: "300px",
+};
+
+const buttonStyle: React.CSSProperties = {
+  margin: "5px 0",
+  padding: "10px 15px",
+  width: "100%",
+  textAlign: "center",
+  cursor: "pointer",
+};
+
+const closeButtonStyle: React.CSSProperties = {
+  marginTop: "20px",
+  padding: "10px 15px",
+  cursor: "pointer",
+};
+
 export const DmMap = (props: {
   map: dmMap_DMMapFragment$key;
   password: string;
@@ -733,6 +827,50 @@ export const DmMap = (props: {
       }),
       [map.grid]
     );
+
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(
+        `/api/download-folder/${"Session_01_20_2025__24-45-26"}`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to download folder");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${"Session_01_20_2025__24-45-26"}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading folder:", error);
+      alert("Failed to download the folder. Please try again.");
+    }
+  };
+
+  const [isModalVisible, setModalVisible] = React.useState(false);
+  const [sessions, setSessions] = React.useState<string[]>([]);
+
+  const openModal = async () => {
+    setModalVisible(true);
+    try {
+      const response = await fetch("/api/list-folders"); // Replace with your API endpoint
+      if (!response.ok) throw new Error("Failed to fetch sessions.");
+      const data = await response.json();
+      setSessions(data.folders || []);
+    } catch (error) {
+      console.error("Error fetching sessions:", error);
+      setSessions([]); // Set to empty if there's an error
+    }
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+  };
 
   return (
     <FlatContextProvider
@@ -931,6 +1069,19 @@ export const DmMap = (props: {
                     <Icon.Label>Map Library</Icon.Label>
                   </Toolbar.Button>
                 </Toolbar.Item>
+                <Toolbar.Item isActive>
+                  <Toolbar.Button onClick={openModal}>
+                    <Icon.Map boxSize="20px" />
+                    <Icon.Label>Download Session</Icon.Label>
+                  </Toolbar.Button>
+                </Toolbar.Item>
+
+                {/* Modal Component */}
+                <Modal
+                  show={isModalVisible}
+                  onClose={closeModal}
+                  sessions={sessions}
+                />
                 <Toolbar.Item isActive>
                   <Toolbar.Button
                     onClick={() => {

@@ -25,6 +25,8 @@ import type {
   Request,
 } from "express-serve-static-core";
 
+import archiver from "archiver";
+
 type RequestWithRole = Request & { role: string | null };
 type ErrorWithStatus = Error & { status: number };
 
@@ -47,6 +49,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
   const maps = new Maps({ processTask, dataDirectory: env.DATA_DIRECTORY });
   const settings = new Settings({ dataDirectory: env.DATA_DIRECTORY });
+  const settingsPath = path.join(env.PUBLIC_PATH, "research", "settings.json");
   const fileStorage = new FileStorage({
     dataDirectory: env.DATA_DIRECTORY,
     db,
@@ -182,6 +185,70 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
         activeMapId: mapId,
       },
     });
+  });
+
+  apiRouter.get("/list-folders", requiresDmRole, (req, res) => {
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    // Read settings.json file
+    fs.readFile(settingsPath, "utf-8", (err, data) => {
+      if (err) {
+        return res
+          .status(500)
+          .json({ error: { message: "Error reading settings file" } });
+      }
+
+      try {
+        const settings = JSON.parse(data);
+
+        // Check if 'downloads' array exists in the settings file
+        if (!settings.downloads) {
+          return res
+            .status(404)
+            .json({
+              error: { message: "No 'downloads' data found in settings" },
+            });
+        }
+
+        // Send back the folder names in the 'downloads' array
+        res.json({ folders: settings.downloads });
+      } catch (parseError) {
+        return res
+          .status(500)
+          .json({ error: { message: "Error parsing settings file" } });
+      }
+    });
+  });
+
+  apiRouter.get("/download-folder/:folderName", requiresDmRole, (req, res) => {
+    const { folderName } = req.params;
+    const folderPath = path.join(
+      env.PUBLIC_PATH,
+      "research",
+      "downloads",
+      folderName
+    );
+
+    if (!fs.existsSync(folderPath)) {
+      return res.status(404).json({ error: { message: "Folder not found" } });
+    }
+
+    const zipFileName = `${folderName}.zip`;
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename=${zipFileName}`);
+
+    const archive = archiver("zip", { zlib: { level: 9 } });
+
+    archive.on("error", (err) => {
+      console.error("Error creating zip:", err);
+      res.status(500).json({ error: { message: "Error creating ZIP file" } });
+    });
+
+    archive.pipe(res);
+    archive.directory(folderPath, false);
+    archive.finalize();
   });
 
   const { router: mapsRouter } = createMapRouter({
