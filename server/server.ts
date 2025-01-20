@@ -187,40 +187,28 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     });
   });
 
-  apiRouter.get("/list-folders", requiresDmRole, (req, res) => {
-    res.setHeader(
-      "Cache-Control",
-      "no-store, no-cache, must-revalidate, proxy-revalidate"
-    );
-    // Read settings.json file
-    fs.readFile(settingsPath, "utf-8", (err, data) => {
-      if (err) {
-        return res
-          .status(500)
-          .json({ error: { message: "Error reading settings file" } });
+  apiRouter.get("/list-folders", requiresDmRole, async (req, res) => {
+    try {
+      // Query the sessions table for all session names
+      const sessions = await db.all('SELECT name FROM sessions');
+  
+      // If there are no sessions found, return a 404 response
+      if (sessions.length === 0) {
+        return res.status(404).json({
+          error: { message: "No folders found in database" },
+        });
       }
-
-      try {
-        const settings = JSON.parse(data);
-
-        // Check if 'downloads' array exists in the settings file
-        if (!settings.downloads) {
-          return res
-            .status(404)
-            .json({
-              error: { message: "No 'downloads' data found in settings" },
-            });
-        }
-
-        // Send back the folder names in the 'downloads' array
-        res.json({ folders: settings.downloads });
-      } catch (parseError) {
-        return res
-          .status(500)
-          .json({ error: { message: "Error parsing settings file" } });
-      }
-    });
+  
+      // Send back the folder names as a JSON response
+      res.json({ folders: sessions.map(session => session.name) });
+    } catch (error) {
+      console.error("Error fetching sessions from the database:", error);
+      return res.status(500).json({
+        error: { message: "Failed to fetch sessions from the database" },
+      });
+    }
   });
+  
 
   apiRouter.get("/download-folder/:folderName", requiresDmRole, (req, res) => {
     const { folderName } = req.params;

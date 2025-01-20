@@ -1,15 +1,28 @@
 const fs = require("fs");
 const path = require("path");
 const { mkdir, copyFile, readdir, stat } = require("fs/promises");
+const { initialize } = require("../../server/database");
 
 const basePath = path.resolve(__dirname, "..");
 const settingsPath = path.join(basePath, "..", "data", "settings.json");
 const researchSettingsPath = path.join(basePath, "research", "settings.json");
 const downloadsFolder = path.join(basePath, "research", "downloads");
+
 let mapSettingsWatcher = null;
 let isWatchingMapSettings = false;
 const sessionCounters = {};
 const debounceTimers = {}; // Debounce timers for map settings
+
+let db;
+
+async function initializeDatabase() {
+  try {
+    db = await initialize({ dataPath: path.join(basePath, "..", "data") });
+    console.log("Database initialized and migrations run.");
+  } catch (err) {
+    console.error("Error initializing the database:", err);
+  }
+}
 
 // Function to get a timestamp
 function getTimestamp() {
@@ -34,23 +47,25 @@ function getTimestamp() {
 // Function to update the research settings.json file
 async function updateResearchSettings(sessionFolderName) {
   try {
-    const data = JSON.parse(fs.readFileSync(researchSettingsPath, "utf-8"));
-    if (!Array.isArray(data.downloads)) {
-      data.downloads = [];
+    if (!db) {
+      console.error("Database is not initialized.");
+      return;
     }
 
-    data.downloads.push(sessionFolderName);
+    // Check if the session already exists in the database
+    const existingSession = await db.get('SELECT * FROM sessions WHERE name = ?', sessionFolderName);
+    
+    if (existingSession) {
+      console.log(`Session '${sessionFolderName}' already exists in the database.`);
+      return;
+    }
 
-    fs.writeFileSync(
-      researchSettingsPath,
-      JSON.stringify(data, null, 2),
-      "utf-8"
-    );
-    console.log(
-      `Added '${sessionFolderName}' to 'downloads' in research/settings.json`
-    );
+    const now = Date.now();
+    await db.run('INSERT INTO sessions (name, created_at, updated_at) VALUES (?, ?, ?)', sessionFolderName, now, now);
+
+    console.log(`Added '${sessionFolderName}' to the database in the 'sessions' table.`);
   } catch (err) {
-    console.error(`Error updating research/settings.json: ${err.message}`, err);
+    console.error(`Error updating database: ${err.message}`, err);
   }
 }
 
@@ -216,6 +231,8 @@ function watchMainSettingsFile() {
 (async () => {
   try {
     console.log("Starting file monitoring...");
+
+    await initializeDatabase();
 
     // Start watching the main settings file
     watchMainSettingsFile();

@@ -617,6 +617,7 @@ const Modal: React.FC<ModalProps> = ({ show, onClose, sessions }) => {
     console.log(`Downloading: ${session}`);
     try {
       const response = await fetch(`/api/download-folder/${session}`);
+      console.log(response);
       if (!response.ok) {
         throw new Error("Failed to download folder");
       }
@@ -828,45 +829,23 @@ export const DmMap = (props: {
       [map.grid]
     );
 
-  const handleDownload = async () => {
-    try {
-      const response = await fetch(
-        `/api/download-folder/${"Session_01_20_2025__24-45-26"}`
-      );
-      if (!response.ok) {
-        throw new Error("Failed to download folder");
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${"Session_01_20_2025__24-45-26"}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error downloading folder:", error);
-      alert("Failed to download the folder. Please try again.");
-    }
-  };
-
   const [isModalVisible, setModalVisible] = React.useState(false);
   const [sessions, setSessions] = React.useState<string[]>([]);
 
   const openModal = async () => {
     setModalVisible(true);
     try {
-      const response = await fetch("/api/list-folders"); // Replace with your API endpoint
+      const response = await fetch("/api/list-folders"); // Calls the updated backend API endpoint
       if (!response.ok) throw new Error("Failed to fetch sessions.");
       const data = await response.json();
-      setSessions(data.folders || []);
+      console.log(data);
+      setSessions(data.folders || []);  // Sets the session names (folders) to the state
     } catch (error) {
       console.error("Error fetching sessions:", error);
-      setSessions([]); // Set to empty if there's an error
+      setSessions([]); // Sets to empty if there's an error
     }
   };
+  
 
   const closeModal = () => {
     setModalVisible(false);
