@@ -1,3 +1,4 @@
+import * as userSession from "./chat/user-session";
 import * as React from "react";
 import useAsyncEffect from "@n1ru4l/use-async-effect";
 import { ReactRelayContext, useMutation, useQuery } from "relay-hooks";
@@ -138,6 +139,10 @@ const PlayerMap = ({
     position: [12, window.innerHeight - 50 - 12] as [number, number],
     snapped: true,
   }));
+
+  // excalidraw iframe
+  const [isIframeOpen, setIsIframeOpen] = React.useState(false);
+  const [iframeUrl, setIframeUrl] = React.useState<string | null>(null);
 
   const [showItems, setShowItems] = React.useState(true);
 
@@ -327,12 +332,40 @@ const PlayerMap = ({
                           <Icon.Label>Notes</Icon.Label>
                         </Toolbar.LongPressButton>
                       </Toolbar.Item>
+
                       <Toolbar.Item isActive>
                         <Toolbar.Button
                           onClick={() => {
-                            // redirects to excalidraw
-                            window.location.href =
-                              "https://excalidraw-production-7dbb.up.railway.app/";
+                            try {
+                              // Get user data from local storage
+                              const user = userSession.getUser();
+
+                              if (!user) {
+                                throw new Error(
+                                  "User data is not available in local storage."
+                                );
+                              }
+
+                              const username = user.name; // Extract username
+                              const userID = user.id; // Extract user ID
+
+                              // Construct the URL with query parameters
+                              // Change this so that it opens up wherever excalidraw is
+                              const url = new URL(
+                                "https://dr-excalidraw-production.up.railway.app/"
+                              );
+                              url.searchParams.append("username", username);
+                              url.searchParams.append("userID", userID);
+
+                              // Set the URL and open the iframe/modal
+                              setIframeUrl(url.toString());
+                              setIsIframeOpen(true);
+                            } catch (error) {
+                              console.error(
+                                "Error retrieving user data or constructing URL:",
+                                error
+                              );
+                            }
                           }}
                         >
                           <Icon.Drawing boxSize="20px" />
@@ -350,6 +383,48 @@ const PlayerMap = ({
         <AbsoluteFullscreenContainer>
           <SplashScreen text="Ready." />
         </AbsoluteFullscreenContainer>
+      )}
+
+      {/* Render the iframe/modal */}
+      {isIframeOpen && iframeUrl && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)", // Semi-transparent background
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000, // Ensure it's on top of other elements
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "20px",
+              borderRadius: "8px",
+              width: "90%",
+              height: "90%",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <button
+              onClick={() => setIsIframeOpen(false)} // Close the iframe/modal
+              style={{ alignSelf: "flex-end", marginBottom: "10px" }}
+            >
+              Close
+            </button>
+            <iframe
+              src={iframeUrl}
+              style={{ flex: 1, border: "none", borderRadius: "4px" }}
+              title="Embedded Content"
+            />
+          </div>
+        </div>
       )}
     </>
   );
