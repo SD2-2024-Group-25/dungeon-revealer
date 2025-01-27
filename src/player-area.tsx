@@ -113,7 +113,11 @@ const PlayerMap = ({
     const handleMessage = (event: MessageEvent) => {
       if (event.data.type === "UPDATE_COLLABORATION_LINK") {
         const { link } = event.data.payload;
-        saveCollaborationLink(link);
+        if (link) {
+          saveCollaborationLink(link);
+        } else {
+          clearCollaborationLink();
+        }
       }
     };
     window.addEventListener("message", handleMessage);
