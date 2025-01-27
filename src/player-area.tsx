@@ -94,6 +94,32 @@ const PlayerMap = ({
   const controlRef = React.useRef<MapControlInterface | null>(null);
   const [markedAreas, setMarkedAreas] = React.useState<MarkedArea[]>(() => []);
 
+  // Save collaboration link to local storage
+  const saveCollaborationLink = (link: string) => {
+    localStorage.setItem("collaborationLink", link);
+  };
+
+  // Retrieve collaboration link from local storage
+  const getCollaborationLink = (): string | null => {
+    return localStorage.getItem("collaborationLink");
+  };
+
+  // Clear collaboration link from local storage
+  const clearCollaborationLink = () => {
+    localStorage.removeItem("collaborationLink");
+  };
+
+  React.useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data.type === "UPDATE_COLLABORATION_LINK") {
+        const { link } = event.data.payload;
+        saveCollaborationLink(link);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
   React.useEffect(() => {
     const contextmenuListener = (ev: Event) => {
       ev.preventDefault();
@@ -149,7 +175,6 @@ const PlayerMap = ({
   const isDraggingRef = React.useRef(false);
 
   const windowDimensions = useWindowDimensions();
-
   React.useEffect(() => {
     const position = toolbarPosition.position.get();
     const snapped = toolbarPosition.snapped.get();
@@ -332,38 +357,35 @@ const PlayerMap = ({
                           <Icon.Label>Notes</Icon.Label>
                         </Toolbar.LongPressButton>
                       </Toolbar.Item>
-
                       <Toolbar.Item isActive>
                         <Toolbar.Button
                           onClick={() => {
                             try {
-                              // Get user data from local storage
                               const user = userSession.getUser();
-
                               if (!user) {
-                                throw new Error(
-                                  "User data is not available in local storage."
-                                );
+                                throw new Error("User data not available");
                               }
 
-                              const username = user.name; // Extract username
-                              const userID = user.id; // Extract user ID
-
-                              // Construct the URL with query parameters
                               const excalidrawUrl = import.meta.env
                                 .VITE_EXCALIDRAW_URL;
                               const url = new URL(excalidrawUrl);
-                              url.searchParams.append("username", username);
-                              url.searchParams.append("userID", userID);
 
-                              // Set the URL and open the iframe/modal
+                              // Add username/userID as query params
+                              url.searchParams.append("username", user.name);
+                              url.searchParams.append("userID", user.id);
+
+                              // Add collaboration room from hash
+                              const savedCollabLink = getCollaborationLink();
+                              if (savedCollabLink) {
+                                const collabUrl = new URL(savedCollabLink);
+                                // Copy hash fragment from saved collaboration link
+                                url.hash = collabUrl.hash;
+                              }
+
                               setIframeUrl(url.toString());
                               setIsIframeOpen(true);
                             } catch (error) {
-                              console.error(
-                                "Error retrieving user data or constructing URL:",
-                                error
-                              );
+                              console.error("Error opening drawing:", error);
                             }
                           }}
                         >
