@@ -350,10 +350,9 @@ const PlayerMap = ({
                               const userID = user.id; // Extract user ID
 
                               // Construct the URL with query parameters
-                              // Change this so that it opens up wherever excalidraw is
-                              const url = new URL(
-                                "https://dr-excalidraw-production.up.railway.app/"
-                              );
+                              const excalidrawUrl = import.meta.env
+                                .VITE_EXCALIDRAW_URL;
+                              const url = new URL(excalidrawUrl);
                               url.searchParams.append("username", username);
                               url.searchParams.append("userID", userID);
 
