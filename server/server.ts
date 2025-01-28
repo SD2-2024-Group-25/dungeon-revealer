@@ -25,6 +25,8 @@ import type {
   Request,
 } from "express-serve-static-core";
 
+const uploadRoutes = require("./routes/upload"); //Defines the route for api upload
+
 type RequestWithRole = Request & { role: string | null };
 type ErrorWithStatus = Error & { status: number };
 
@@ -145,6 +147,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       },
     });
   });
+
+  apiRouter.use("/upload", uploadRoutes); //api call for upload
 
   apiRouter.get("/active-map", requiresPcRole, (req, res) => {
     let activeMap = null;
