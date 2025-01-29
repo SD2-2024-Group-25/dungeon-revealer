@@ -1,75 +1,79 @@
 const fs = require("fs");
 const path = require("path");
 const { mkdir, copyFile, readdir, stat } = require("fs/promises");
-const { initialize } = require("../../server/database");
 
-const basePath = path.resolve(__dirname, "..");
-const settingsPath = path.join(basePath, "..", "data", "settings.json");
-const researchSettingsPath = path.join(basePath, "research", "settings.json");
+const basePath = path.resolve(__dirname, ".."); // Public path
+const settingsPath = path.join(basePath, "..", "data", "settings.json"); // settings of currentMapId
+const researchSettingsPath = path.join(basePath, "research", "settings.json"); // settings of recording
 const downloadsFolder = path.join(basePath, "research", "downloads");
+const sessionFolder = path.join(downloadsFolder, "session");
 
 let mapSettingsWatcher = null;
 let isWatchingMapSettings = false;
-const sessionCounters = {};
+let recording = false;
 const debounceTimers = {}; // Debounce timers for map settings
-
-let db;
-
-async function initializeDatabase() {
-  try {
-    db = await initialize({ dataPath: path.join(basePath, "..", "data") });
-    console.log("Database initialized and migrations run.");
-  } catch (err) {
-    console.error("Error initializing the database:", err);
-  }
-}
 
 // Function to get a timestamp
 function getTimestamp() {
-  const options = {
-    timeZone: "America/New_York", // Set to Eastern Time (New York)
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false, // Use 24-hour format
-  };
-
-  const localTime = new Date().toLocaleString("en-US", options);
-
-  return localTime
-    .replace(/[/, ]/g, "_") // Replace slashes and spaces with underscores
-    .replace(/:/g, "-"); // Replace colons with dashes
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  const seconds = String(now.getSeconds()).padStart(2, "0");
+  return `${hours}_${minutes}_${seconds}`;
 }
 
-// Function to update the research settings.json file
-async function updateResearchSettings(sessionFolderName) {
+// Function to check recording status and currentMapId
+function shouldRecord(currentMapId) {
+  return recording && currentMapId !== null;
+}
+
+// Ensure downloads and session folders exist
+async function ensureFoldersExist() {
   try {
-    if (!db) {
-      console.error("Database is not initialized.");
-      return;
-    }
+    // Ensure the downloads folder exists
+    await mkdir(downloadsFolder, { recursive: true });
 
-    // Check if the session already exists in the database
-    const existingSession = await db.get('SELECT * FROM sessions WHERE name = ?', sessionFolderName);
-    
-    if (existingSession) {
-      console.log(`Session '${sessionFolderName}' already exists in the database.`);
-      return;
-    }
-
-    const now = Date.now();
-    await db.run('INSERT INTO sessions (name, created_at, updated_at) VALUES (?, ?, ?)', sessionFolderName, now, now);
-
-    console.log(`Added '${sessionFolderName}' to the database in the 'sessions' table.`);
+    // Ensure the session folder exists
+    await mkdir(sessionFolder, { recursive: true });
   } catch (err) {
-    console.error(`Error updating database: ${err.message}`, err);
+    console.error(`Error ensuring folders exist: ${err.message}`);
   }
 }
 
-// Function to copy data to a unique folder in the session directory
+async function handleMapSettingsChange(mapFolder) {
+  const iterationFolder = path.join(
+    sessionFolder,
+    `Iteration_${getTimestamp()}`
+  );
+
+  // Copy the folder contents
+  await copyFolder(mapFolder, iterationFolder);
+
+  // Update the iteration's settings.json `id` field
+  const iterationSettingsPath = path.join(iterationFolder, "settings.json");
+  await updateIterationSettings(
+    iterationSettingsPath,
+    path.basename(iterationFolder)
+  );
+}
+
+// Function to update the `id` field in the iteration's settings.json file
+async function updateIterationSettings(iterationSettingsPath, newId) {
+  try {
+    const data = JSON.parse(fs.readFileSync(iterationSettingsPath, "utf-8"));
+    data.id = newId;
+
+    fs.writeFileSync(
+      iterationSettingsPath,
+      JSON.stringify(data, null, 2),
+      "utf-8"
+    );
+  } catch (err) {
+    console.error(`Error updating settings.json: ${err.message}`, err);
+  }
+}
+
+// Function to copy data to the session folder for each iteration
 async function copyFolder(source, destination) {
   try {
     await mkdir(destination, { recursive: true });
@@ -86,102 +90,29 @@ async function copyFolder(source, destination) {
         await copyFile(sourceItem, destinationItem);
       }
     }
-
-    console.log(`Copied data from ${source} to ${destination}`);
   } catch (err) {
     console.error(`Error copying folder: ${err.message}`);
   }
 }
 
-// Function to update the `id` field in the settings.json file for each iteration
-async function updateIterationSettings(iterationSettingsPath, newId) {
-  try {
-    const data = JSON.parse(fs.readFileSync(iterationSettingsPath, "utf-8"));
-    data.id = newId; // Update the id field
-
-    fs.writeFileSync(
-      iterationSettingsPath,
-      JSON.stringify(data, null, 2),
-      "utf-8"
-    );
-    console.log(`Updated 'id' in settings.json to: ${newId}`);
-  } catch (err) {
-    console.error(`Error updating settings.json: ${err.message}`, err);
-  }
-}
-
-// Function to handle copying data when `settings.json` changes in the map folder
-async function handleMapSettingsChange(
-  mapFolder,
-  sessionBaseFolder,
-  instanceCounter
-) {
-  const iterationFolder = path.join(
-    sessionBaseFolder,
-    `Iteration_${instanceCounter}`
-  );
-  console.log(
-    `Detected change in map settings. Creating iteration: ${iterationFolder}`
-  );
-
-  // Copy the folder contents
-  await copyFolder(mapFolder, iterationFolder);
-
-  // Update the iteration's settings.json `id` field
-  const iterationSettingsPath = path.join(iterationFolder, "settings.json");
-  await updateIterationSettings(
-    iterationSettingsPath,
-    path.basename(iterationFolder)
-  );
-}
-
 // Function to start watching the map-specific settings file
 function startWatchingMapSettings(currentMapId) {
+  if (!currentMapId) return;
+
   const mapFolder = path.join(basePath, "..", "data", "maps", currentMapId);
   const mapSettingsPath = path.join(mapFolder, "settings.json");
-  const sessionBaseFolder = path.join(
-    downloadsFolder,
-    `Session_${getTimestamp()}`
-  );
-  sessionCounters[currentMapId] = 1; // Initialize counter for this session
 
-  // Create the session base folder
-  mkdir(sessionBaseFolder, { recursive: true })
-    .then(async () => {
-      console.log(`Created session base folder: ${sessionBaseFolder}`);
-
-      // Update research/settings.json with the new session folder name
-      await updateResearchSettings(path.basename(sessionBaseFolder));
-
-      // Perform the initial copy
-      await handleMapSettingsChange(
-        mapFolder,
-        sessionBaseFolder,
-        sessionCounters[currentMapId]
-      );
-      sessionCounters[currentMapId]++; // Increment counter for the next iteration
-
-      // Start watching the map settings
-      mapSettingsWatcher = fs.watch(mapSettingsPath, (eventType) => {
-        if (eventType === "change") {
-          if (debounceTimers[currentMapId]) {
-            clearTimeout(debounceTimers[currentMapId]);
-          }
-          debounceTimers[currentMapId] = setTimeout(async () => {
-            await handleMapSettingsChange(
-              mapFolder,
-              sessionBaseFolder,
-              sessionCounters[currentMapId]
-            );
-            sessionCounters[currentMapId]++; // Increment counter for each change
-          }, 100); // 100ms debounce delay
-        }
-      });
-      isWatchingMapSettings = true;
-    })
-    .catch((err) =>
-      console.error(`Error creating session base folder: ${err.message}`)
-    );
+  mapSettingsWatcher = fs.watch(mapSettingsPath, (eventType) => {
+    if (eventType === "change" && shouldRecord(currentMapId)) {
+      if (debounceTimers[currentMapId]) {
+        clearTimeout(debounceTimers[currentMapId]);
+      }
+      debounceTimers[currentMapId] = setTimeout(async () => {
+        handleMapSettingsChange(mapFolder);
+      }, 100); // 100ms debounce delay
+    }
+  });
+  isWatchingMapSettings = true;
 }
 
 // Function to stop watching the map-specific settings file
@@ -194,28 +125,61 @@ function stopWatchingMapSettings() {
   }
 }
 
+// Function to handle changes in the research settings file
+function watchResearchSettingsFile() {
+  let previousRecordingState = null;
+
+  fs.watch(researchSettingsPath, async (eventType) => {
+    if (eventType === "change") {
+      try {
+        const researchSettings = JSON.parse(
+          fs.readFileSync(researchSettingsPath, "utf-8")
+        );
+        const recordingState = researchSettings.recording;
+
+        if (recordingState !== previousRecordingState) {
+          recording = recordingState === "recording";
+          previousRecordingState = recordingState;
+
+          const mainSettings = JSON.parse(
+            fs.readFileSync(settingsPath, "utf-8")
+          );
+          const currentMapId = mainSettings.currentMapId;
+
+          if (shouldRecord(currentMapId)) {
+            startWatchingMapSettings(currentMapId);
+          } else {
+            stopWatchingMapSettings();
+          }
+        }
+      } catch (err) {
+        console.error(
+          `Error reading or parsing ${researchSettingsPath}: ${err.message}`
+        );
+      }
+    }
+  });
+}
+
 // Function to watch the main settings file
 function watchMainSettingsFile() {
   let previousMapId = null;
 
   fs.watch(settingsPath, async (eventType) => {
     if (eventType === "change") {
-      console.log("Detected changes in main settings.json...");
       try {
         const mainSettings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
         const currentMapId = mainSettings.currentMapId;
 
-        if (currentMapId && currentMapId !== previousMapId) {
-          // Stop watching the previous map settings if necessary
-          stopWatchingMapSettings();
-
-          // Start watching the new map settings
-          startWatchingMapSettings(currentMapId);
-        } else if (!currentMapId) {
-          stopWatchingMapSettings();
+        if (currentMapId !== previousMapId) {
+          if (shouldRecord(currentMapId)) {
+            stopWatchingMapSettings();
+            startWatchingMapSettings(currentMapId);
+          } else {
+            stopWatchingMapSettings();
+          }
+          previousMapId = currentMapId;
         }
-
-        previousMapId = currentMapId;
       } catch (err) {
         console.error(
           `Error reading or parsing ${settingsPath}: ${err.message}`
@@ -223,8 +187,6 @@ function watchMainSettingsFile() {
       }
     }
   });
-
-  console.log(`Watching main settings file: ${settingsPath}`);
 }
 
 // Initialize the script
@@ -232,15 +194,33 @@ function watchMainSettingsFile() {
   try {
     console.log("Starting file monitoring...");
 
-    await initializeDatabase();
+    // Set initial state: currentMapId = null, recording = "stopped"
+    const mainSettings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+    mainSettings.currentMapId = null;
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify(mainSettings, null, 2),
+      "utf-8"
+    );
 
-    // Start watching the main settings file
+    const researchSettings = JSON.parse(
+      fs.readFileSync(researchSettingsPath, "utf-8")
+    );
+    researchSettings.recording = "stopped";
+    fs.writeFileSync(
+      researchSettingsPath,
+      JSON.stringify(researchSettings, null, 2),
+      "utf-8"
+    );
+
+    await ensureFoldersExist(); // Ensure folders are in place
+    watchResearchSettingsFile();
     watchMainSettingsFile();
 
-    // Initial check to start or stop watching map-specific settings
-    const mainSettings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+    recording = researchSettings.recording === "recording";
     const currentMapId = mainSettings.currentMapId;
-    if (currentMapId) {
+
+    if (shouldRecord(currentMapId)) {
       startWatchingMapSettings(currentMapId);
     }
   } catch (err) {
