@@ -49,7 +49,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
   const maps = new Maps({ processTask, dataDirectory: env.DATA_DIRECTORY });
   const settings = new Settings({ dataDirectory: env.DATA_DIRECTORY });
-  const settingsPath = path.join(env.PUBLIC_PATH, "research", "settings.json");
+  const researchPath = path.join(__dirname, "..", "public", "research");
   const fileStorage = new FileStorage({
     dataDirectory: env.DATA_DIRECTORY,
     db,
@@ -190,17 +190,17 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   apiRouter.get("/list-folders", requiresDmRole, async (req, res) => {
     try {
       // Query the sessions table for all session names
-      const sessions = await db.all('SELECT name FROM sessions');
-  
+      const sessions = await db.all("SELECT name FROM sessions");
+
       // If there are no sessions found, return a 404 response
       if (sessions.length === 0) {
         return res.status(404).json({
           error: { message: "No folders found in database" },
         });
       }
-  
+
       // Send back the folder names as a JSON response
-      res.json({ folders: sessions.map(session => session.name) });
+      res.json({ folders: sessions.map((session) => session.name) });
     } catch (error) {
       console.error("Error fetching sessions from the database:", error);
       return res.status(500).json({
@@ -208,16 +208,45 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       });
     }
   });
-  
+
+  app.post("/api/recording", (req, res) => {
+    console.log("Recording API route hit"); // Check if the route is being triggered
+    const filePath = path.join(researchPath, "settings.json");
+    console.log("File path to write:", filePath); // Debug the file path
+
+    fs.readFile(filePath, "utf8", (err, data) => {
+      if (err) {
+        console.error("Error reading file:", err);
+        return res.status(500).json({ message: "Error reading file" });
+      }
+
+      let jsonData;
+      try {
+        jsonData = JSON.parse(data); // Parse the JSON content
+      } catch (e) {
+        console.error("Error parsing JSON:", e);
+        return res.status(500).json({ message: "Error parsing JSON" });
+      }
+
+      const updatedState =
+        jsonData.recording === "recording" ? "stopped" : "recording";
+      jsonData.recording = updatedState;
+      console.log("Updated recording state:", updatedState); // Check updated state
+
+      fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), (err) => {
+        if (err) {
+          console.error("Error writing file:", err);
+          return res.status(500).json({ message: "Error updating file" });
+        }
+        console.log("File written successfully"); // Confirm file was written
+        res.json({ recording: updatedState });
+      });
+    });
+  });
 
   apiRouter.get("/download-folder/:folderName", requiresDmRole, (req, res) => {
     const { folderName } = req.params;
-    const folderPath = path.join(
-      env.PUBLIC_PATH,
-      "research",
-      "downloads",
-      folderName
-    );
+    const folderPath = path.join(researchPath, "downloads", folderName);
 
     if (!fs.existsSync(folderPath)) {
       return res.status(404).json({ error: { message: "Folder not found" } });

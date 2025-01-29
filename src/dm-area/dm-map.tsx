@@ -829,6 +829,30 @@ export const DmMap = (props: {
       [map.grid]
     );
 
+  const [isRecording, setIsRecording] = React.useState(false);
+  const handleClick = async () => {
+    console.log("recording clicked");
+    try {
+      const response = await fetch("/api/recording", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Update the local state based on the response
+        setIsRecording(data.recording === "recording");
+      } else {
+        console.error("Failed to update recording state");
+      }
+    } catch (err) {
+      console.error("Error making API request:", err);
+    }
+  };
+
   const [isModalVisible, setModalVisible] = React.useState(false);
   const [sessions, setSessions] = React.useState<string[]>([]);
 
@@ -839,13 +863,12 @@ export const DmMap = (props: {
       if (!response.ok) throw new Error("Failed to fetch sessions.");
       const data = await response.json();
       console.log(data);
-      setSessions(data.folders || []);  // Sets the session names (folders) to the state
+      setSessions(data.folders || []); // Sets the session names (folders) to the state
     } catch (error) {
       console.error("Error fetching sessions:", error);
       setSessions([]); // Sets to empty if there's an error
     }
   };
-  
 
   const closeModal = () => {
     setModalVisible(false);
@@ -1150,6 +1173,14 @@ export const DmMap = (props: {
                   >
                     <Icon.Send boxSize="20px" />
                     <Icon.Label>Send</Icon.Label>
+                  </Toolbar.Button>
+                </Toolbar.Item>
+                <Toolbar.Item isActive>
+                  <Toolbar.Button onClick={handleClick}>
+                    <Icon.Send boxSize="20px" />
+                    <Icon.Label>
+                      {isRecording ? "Stop" : "Start"} Recording
+                    </Icon.Label>
                   </Toolbar.Button>
                 </Toolbar.Item>
               </Toolbar.Group>
