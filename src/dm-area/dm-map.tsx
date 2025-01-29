@@ -609,11 +609,11 @@ const DMMapFragment = graphql`
 interface ModalProps {
   show: boolean;
   onClose: () => void;
-  sessions: string[];
 }
 
-const Modal: React.FC<ModalProps> = ({ show, onClose, sessions }) => {
-  const handleDownloadClick = async (session: string) => {
+const Modal: React.FC<ModalProps> = ({ show, onClose }) => {
+  const handleDownloadClick = async () => {
+    const session = "session"; // Folder name is always "session"
     console.log(`Downloading: ${session}`);
     try {
       const response = await fetch(`/api/download-folder/${session}`);
@@ -642,23 +642,11 @@ const Modal: React.FC<ModalProps> = ({ show, onClose, sessions }) => {
   return (
     <div style={modalOverlayStyle}>
       <div style={modalStyle}>
-        <h2>Session Downloads</h2>
-        <p>Select a session to download:</p>
-        <div>
-          {sessions.length > 0 ? (
-            sessions.map((session, index) => (
-              <button
-                key={index}
-                onClick={() => handleDownloadClick(session)}
-                style={buttonStyle}
-              >
-                {session}
-              </button>
-            ))
-          ) : (
-            <p>No sessions available for download.</p>
-          )}
-        </div>
+        <h2>Session Download</h2>
+        <p>Click the button below to download the session:</p>
+        <button onClick={handleDownloadClick} style={buttonStyle}>
+          Download Session
+        </button>
         <button onClick={onClose} style={closeButtonStyle}>
           Close
         </button>
@@ -854,20 +842,9 @@ export const DmMap = (props: {
   };
 
   const [isModalVisible, setModalVisible] = React.useState(false);
-  const [sessions, setSessions] = React.useState<string[]>([]);
 
   const openModal = async () => {
     setModalVisible(true);
-    try {
-      const response = await fetch("/api/list-folders"); // Calls the updated backend API endpoint
-      if (!response.ok) throw new Error("Failed to fetch sessions.");
-      const data = await response.json();
-      console.log(data);
-      setSessions(data.folders || []); // Sets the session names (folders) to the state
-    } catch (error) {
-      console.error("Error fetching sessions:", error);
-      setSessions([]); // Sets to empty if there's an error
-    }
   };
 
   const closeModal = () => {
@@ -1073,17 +1050,13 @@ export const DmMap = (props: {
                 </Toolbar.Item>
                 <Toolbar.Item isActive>
                   <Toolbar.Button onClick={openModal}>
-                    <Icon.Map boxSize="20px" />
+                    <Icon.Download boxSize="20px" />
                     <Icon.Label>Download Session</Icon.Label>
                   </Toolbar.Button>
                 </Toolbar.Item>
 
                 {/* Modal Component */}
-                <Modal
-                  show={isModalVisible}
-                  onClose={closeModal}
-                  sessions={sessions}
-                />
+                <Modal show={isModalVisible} onClose={closeModal} />
                 <Toolbar.Item isActive>
                   <Toolbar.Button
                     onClick={() => {
@@ -1177,7 +1150,7 @@ export const DmMap = (props: {
                 </Toolbar.Item>
                 <Toolbar.Item isActive>
                   <Toolbar.Button onClick={handleClick}>
-                    <Icon.Send boxSize="20px" />
+                    <Icon.Camera boxSize="20px" />
                     <Icon.Label>
                       {isRecording ? "Stop" : "Start"} Recording
                     </Icon.Label>
