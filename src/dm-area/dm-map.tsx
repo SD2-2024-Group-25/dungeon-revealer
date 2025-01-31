@@ -611,13 +611,38 @@ interface ModalProps {
   onClose: () => void;
 }
 
-const Modal: React.FC<ModalProps> = ({ show, onClose }) => {
-  const handleDownloadClick = async () => {
-    const session = "session"; // Folder name is always "session"
-    console.log(`Downloading: ${session}`);
+const DownloadModal: React.FC<ModalProps> = ({ show, onClose }) => {
+  const [sessions, setSessions] = React.useState<string[]>([]);
+  const [loading, setLoading] = React.useState<boolean>(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (show) {
+      // Fetch the list of session folders when the modal is shown
+      const fetchSessions = async () => {
+        try {
+          setLoading(true);
+          const response = await fetch("/api/list-sessions"); // Use the updated endpoint for session folders
+          if (!response.ok) {
+            throw new Error("Failed to fetch session list");
+          }
+          const data = await response.json();
+          setSessions(data.sessions); // Store the session folder names
+        } catch (error) {
+          setError("Failed to load sessions");
+          console.error("Error fetching sessions:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchSessions();
+    }
+  }, [show]);
+
+  const handleDownloadClick = async (session: string) => {
     try {
       const response = await fetch(`/api/download-folder/${session}`);
-      console.log(response);
       if (!response.ok) {
         throw new Error("Failed to download folder");
       }
@@ -643,9 +668,86 @@ const Modal: React.FC<ModalProps> = ({ show, onClose }) => {
     <div style={modalOverlayStyle}>
       <div style={modalStyle}>
         <h2>Session Download</h2>
-        <p>Click the button below to download the session:</p>
-        <button onClick={handleDownloadClick} style={buttonStyle}>
-          Download Session
+        {loading ? (
+          <p>Loading sessions...</p>
+        ) : error ? (
+          <p>{error}</p>
+        ) : sessions.length === 0 ? (
+          <p>No sessions available for download</p>
+        ) : (
+          <>
+            <p>Select a session to download:</p>
+            <ul>
+              {sessions.map((session) => (
+                <ol key={session}>
+                  <button
+                    onClick={() => handleDownloadClick(session)}
+                    style={buttonStyle}
+                  >
+                    {session}
+                  </button>
+                </ol>
+              ))}
+            </ul>
+          </>
+        )}
+        <button onClick={onClose} style={closeButtonStyle}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
+  const [sessionName, setSessionName] = React.useState("");
+
+  const handleSaveClick = async () => {
+    if (!sessionName.trim()) {
+      alert("Please enter a session name.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/save-session/${sessionName}`, {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        console.log("Session saved successfully.");
+        onClose();
+      } else {
+        console.error("Failed to save session.");
+      }
+    } catch (err) {
+      console.error("Error saving session:", err);
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <div style={modalOverlayStyle}>
+      <div style={modalStyle}>
+        <h2>Save Session</h2>
+        <p>Do you want to save the session before exiting?</p>
+        <label htmlFor="session-name">Session Name:</label>
+        <input
+          id="session-name"
+          type="text"
+          placeholder="Enter session name..."
+          value={sessionName}
+          onChange={(e) => setSessionName(e.target.value)}
+          style={{
+            width: "100%",
+            padding: "8px",
+            marginTop: "8px",
+            border: "1px solid #ccc",
+            borderRadius: "4px",
+          }}
+        />
+        <button onClick={handleSaveClick} style={buttonStyle}>
+          Save
         </button>
         <button onClick={onClose} style={closeButtonStyle}>
           Close
@@ -841,14 +943,24 @@ export const DmMap = (props: {
     }
   };
 
-  const [isModalVisible, setModalVisible] = React.useState(false);
+  const [isDownloadModalVisible, setDownloadModalVisible] =
+    React.useState(false);
+  const [isSaveModalVisible, setSaveModalVisible] = React.useState(false);
 
-  const openModal = async () => {
-    setModalVisible(true);
+  const openDownloadModal = async () => {
+    setDownloadModalVisible(true);
   };
 
-  const closeModal = () => {
-    setModalVisible(false);
+  const closeDownloadModal = () => {
+    setDownloadModalVisible(false);
+  };
+
+  const openSaveModal = async () => {
+    setSaveModalVisible(true);
+  };
+
+  const closeSaveModal = () => {
+    setSaveModalVisible(false);
   };
 
   return (
@@ -1049,14 +1161,24 @@ export const DmMap = (props: {
                   </Toolbar.Button>
                 </Toolbar.Item>
                 <Toolbar.Item isActive>
-                  <Toolbar.Button onClick={openModal}>
+                  <Toolbar.Button onClick={openDownloadModal}>
                     <Icon.Download boxSize="20px" />
                     <Icon.Label>Download Session</Icon.Label>
                   </Toolbar.Button>
                 </Toolbar.Item>
-
-                {/* Modal Component */}
-                <Modal show={isModalVisible} onClose={closeModal} />
+                {/* DownloadModal Component */}
+                <DownloadModal
+                  show={isDownloadModalVisible}
+                  onClose={closeDownloadModal}
+                />
+                <Toolbar.Item isActive>
+                  <Toolbar.Button onClick={openSaveModal}>
+                    <Icon.Save boxSize="20px" />
+                    <Icon.Label>Save Session</Icon.Label>
+                  </Toolbar.Button>
+                </Toolbar.Item>
+                {/* SaveModal Component */}
+                <SaveModal show={isSaveModalVisible} onClose={closeSaveModal} />
                 <Toolbar.Item isActive>
                   <Toolbar.Button
                     onClick={() => {

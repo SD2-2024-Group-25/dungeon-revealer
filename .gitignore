@@ -24,7 +24,7 @@ data
 
 # Research Data Download/Upload #
 public/research/downloads
-public/research/uploads
+public/research/saved
 
 # Packages #
 ############

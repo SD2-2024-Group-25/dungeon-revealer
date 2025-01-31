@@ -187,25 +187,30 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     });
   });
 
-  apiRouter.get("/list-folders", requiresDmRole, async (req, res) => {
-    try {
-      // Query the sessions table for all session names
-      const sessions = await db.all("SELECT name FROM sessions");
+  apiRouter.get("/list-sessions", async (req, res) => {
+    const savedFolderPath = path.join(researchPath, "saved"); // Adjust this path as needed
 
-      // If there are no sessions found, return a 404 response
-      if (sessions.length === 0) {
-        return res.status(404).json({
-          error: { message: "No folders found in database" },
-        });
+    try {
+      // Check if the saved folder exists
+      if (!fs.existsSync(savedFolderPath)) {
+        return res.status(404).json({ error: "Saved folder not found" });
       }
 
-      // Send back the folder names as a JSON response
-      res.json({ folders: sessions.map((session) => session.name) });
-    } catch (error) {
-      console.error("Error fetching sessions from the database:", error);
-      return res.status(500).json({
-        error: { message: "Failed to fetch sessions from the database" },
-      });
+      // List all directories (session folders) in the saved folder
+      const files = await fs.readdir(savedFolderPath);
+      const sessionFolders = files.filter((file) =>
+        fs.statSync(path.join(savedFolderPath, file)).isDirectory()
+      );
+
+      if (sessionFolders.length === 0) {
+        return res.status(404).json({ error: "No sessions found" });
+      }
+
+      // Return the list of session folder names
+      res.json({ sessions: sessionFolders });
+    } catch (err) {
+      console.error("Error reading saved folder:", err);
+      return res.status(500).json({ error: "Failed to list sessions" });
     }
   });
 
@@ -246,7 +251,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
   apiRouter.get("/download-folder/:folderName", requiresDmRole, (req, res) => {
     const { folderName } = req.params;
-    const folderPath = path.join(researchPath, "downloads", folderName);
+    const folderPath = path.join(researchPath, "saved", folderName);
 
     if (!fs.existsSync(folderPath)) {
       return res.status(404).json({ error: { message: "Folder not found" } });
@@ -267,6 +272,73 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     archive.directory(folderPath, false);
     archive.finalize();
   });
+
+  apiRouter.post("/save-session/:folderName", (req, res) => {
+    const name = req.params.folderName;
+    console.log(name);
+    if (!name || name.trim() === "") {
+      return res.status(400).json({ error: "Session name is required" });
+    }
+
+    const sanitizedFolderName = name.replace(/[^a-zA-Z0-9-_]/g, "_"); // Sanitize name
+    console.log("here", sanitizedFolderName);
+    const sourceFolder = path.join(researchPath, "downloads", "session"); // Original session folder
+    const destinationFolder = path.join(
+      researchPath,
+      "saved",
+      sanitizedFolderName
+    ); // Target saved folder
+
+    try {
+      if (!fs.existsSync(sourceFolder)) {
+        return res.status(404).json({ error: "Session folder not found" });
+      }
+
+      if (!fs.existsSync(path.join(researchPath, "saved"))) {
+        fs.mkdirSync(path.join(researchPath, "saved"), { recursive: true });
+      }
+
+      copyFolderRecursive(sourceFolder, destinationFolder);
+      deleteFolderContents(sourceFolder);
+
+      console.log(`Session saved: ${sanitizedFolderName}`);
+      res
+        .status(200)
+        .json({ message: `Session saved as "${sanitizedFolderName}"` });
+    } catch (error) {}
+  });
+
+  function copyFolderRecursive(source: any, target: any) {
+    if (!fs.existsSync(target)) {
+      fs.mkdirSync(target, { recursive: true });
+    }
+
+    fs.readdirSync(source, { withFileTypes: true }).forEach((entry) => {
+      const srcPath = path.join(source, entry.name);
+      const destPath = path.join(target, entry.name);
+
+      if (entry.isDirectory()) {
+        // Recursively copy subfolders
+        copyFolderRecursive(srcPath, destPath);
+      } else {
+        // Copy individual files
+        fs.copyFileSync(srcPath, destPath);
+      }
+    });
+  }
+
+  function deleteFolderContents(folderPath: any) {
+    if (fs.existsSync(folderPath)) {
+      fs.readdirSync(folderPath).forEach((file) => {
+        const curPath = path.join(folderPath, file);
+        if (fs.lstatSync(curPath).isDirectory()) {
+          fs.rmSync(curPath, { recursive: true, force: true }); // Deletes subdirectories
+        } else {
+          fs.unlinkSync(curPath); // Deletes files
+        }
+      });
+    }
+  }
 
   const { router: mapsRouter } = createMapRouter({
     roleMiddleware,
