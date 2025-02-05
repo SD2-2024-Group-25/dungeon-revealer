@@ -677,18 +677,20 @@ const DownloadModal: React.FC<ModalProps> = ({ show, onClose }) => {
         ) : (
           <>
             <p>Select a session to download:</p>
-            <ul>
-              {sessions.map((session) => (
-                <ol key={session}>
-                  <button
-                    onClick={() => handleDownloadClick(session)}
-                    style={buttonStyle}
-                  >
-                    {session}
-                  </button>
-                </ol>
-              ))}
-            </ul>
+            <div style={listContainerStyle}>
+              <ul>
+                {sessions.map((session) => (
+                  <ol key={session}>
+                    <button
+                      onClick={() => handleDownloadClick(session)}
+                      style={buttonStyle}
+                    >
+                      {session}
+                    </button>
+                  </ol>
+                ))}
+              </ul>
+            </div>
           </>
         )}
         <button onClick={onClose} style={closeButtonStyle}>
@@ -775,6 +777,12 @@ const modalStyle: React.CSSProperties = {
   borderRadius: "8px",
   textAlign: "center",
   width: "300px",
+};
+
+const listContainerStyle: React.CSSProperties = {
+  maxHeight: "200px", // Set a max height for the list container
+  overflowY: "auto", // Enable scrolling within the list container
+  marginBottom: "10px", // Optional: Add space at the bottom of the list
 };
 
 const buttonStyle: React.CSSProperties = {
