@@ -1,3 +1,4 @@
+import * as userSession from "./chat/user-session";
 import * as React from "react";
 import useAsyncEffect from "@n1ru4l/use-async-effect";
 import { ReactRelayContext, useMutation, useQuery } from "relay-hooks";
@@ -93,6 +94,36 @@ const PlayerMap = ({
   const controlRef = React.useRef<MapControlInterface | null>(null);
   const [markedAreas, setMarkedAreas] = React.useState<MarkedArea[]>(() => []);
 
+  // Save collaboration link to local storage
+  const saveCollaborationLink = (link: string) => {
+    localStorage.setItem("collaborationLink", link);
+  };
+
+  // Retrieve collaboration link from local storage
+  const getCollaborationLink = (): string | null => {
+    return localStorage.getItem("collaborationLink");
+  };
+
+  // Clear collaboration link from local storage
+  const clearCollaborationLink = () => {
+    localStorage.removeItem("collaborationLink");
+  };
+
+  React.useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data.type === "UPDATE_COLLABORATION_LINK") {
+        const { link } = event.data.payload;
+        if (link) {
+          saveCollaborationLink(link);
+        } else {
+          clearCollaborationLink();
+        }
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
   React.useEffect(() => {
     const contextmenuListener = (ev: Event) => {
       ev.preventDefault();
@@ -139,12 +170,15 @@ const PlayerMap = ({
     snapped: true,
   }));
 
+  // excalidraw iframe
+  const [isIframeOpen, setIsIframeOpen] = React.useState(false);
+  const [iframeUrl, setIframeUrl] = React.useState<string | null>(null);
+
   const [showItems, setShowItems] = React.useState(true);
 
   const isDraggingRef = React.useRef(false);
 
   const windowDimensions = useWindowDimensions();
-
   React.useEffect(() => {
     const position = toolbarPosition.position.get();
     const snapped = toolbarPosition.snapped.get();
@@ -330,9 +364,33 @@ const PlayerMap = ({
                       <Toolbar.Item isActive>
                         <Toolbar.Button
                           onClick={() => {
-                            // redirects to excalidraw
-                            window.location.href =
-                              "https://excalidraw-production-7dbb.up.railway.app/";
+                            try {
+                              const user = userSession.getUser();
+                              if (!user) {
+                                throw new Error("User data not available");
+                              }
+
+                              const excalidrawUrl = import.meta.env
+                                .VITE_EXCALIDRAW_URL;
+                              const url = new URL(excalidrawUrl);
+
+                              // Add username/userID as query params
+                              url.searchParams.append("username", user.name);
+                              url.searchParams.append("userID", user.id);
+
+                              // Add collaboration room from hash
+                              const savedCollabLink = getCollaborationLink();
+                              if (savedCollabLink) {
+                                const collabUrl = new URL(savedCollabLink);
+                                // Copy hash fragment from saved collaboration link
+                                url.hash = collabUrl.hash;
+                              }
+
+                              setIframeUrl(url.toString());
+                              setIsIframeOpen(true);
+                            } catch (error) {
+                              console.error("Error opening drawing:", error);
+                            }
                           }}
                         >
                           <Icon.Drawing boxSize="20px" />
@@ -350,6 +408,48 @@ const PlayerMap = ({
         <AbsoluteFullscreenContainer>
           <SplashScreen text="Ready." />
         </AbsoluteFullscreenContainer>
+      )}
+
+      {/* Render the iframe/modal */}
+      {isIframeOpen && iframeUrl && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)", // Semi-transparent background
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000, // Ensure it's on top of other elements
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "20px",
+              borderRadius: "8px",
+              width: "90%",
+              height: "90%",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <button
+              onClick={() => setIsIframeOpen(false)} // Close the iframe/modal
+              style={{ alignSelf: "flex-end", marginBottom: "10px" }}
+            >
+              Close
+            </button>
+            <iframe
+              src={iframeUrl}
+              style={{ flex: 1, border: "none", borderRadius: "4px" }}
+              title="Embedded Content"
+            />
+          </div>
+        </div>
       )}
     </>
   );
