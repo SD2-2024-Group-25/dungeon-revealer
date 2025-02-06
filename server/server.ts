@@ -26,6 +26,8 @@ import type {
 } from "express-serve-static-core";
 
 const uploadRoutes = require("./routes/upload"); //Defines the route for api upload
+const copyRoutes = require("./routes/copy"); //Defines the route for api copy
+const fetchdefaultRoutes = require("./routes/fetch"); //Defines the route for api fetchdefault
 
 type RequestWithRole = Request & { role: string | null };
 type ErrorWithStatus = Error & { status: number };
@@ -149,6 +151,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   });
 
   apiRouter.use("/upload", uploadRoutes); //api call for upload
+  apiRouter.use("/copy", copyRoutes); //api call for copy
+  apiRouter.use("/fetch", fetchdefaultRoutes); //api call for fetchdefault
 
   apiRouter.get("/active-map", requiresPcRole, (req, res) => {
     let activeMap = null;
