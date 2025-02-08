@@ -606,6 +606,199 @@ const DMMapFragment = graphql`
   }
 `;
 
+interface ModalProps {
+  show: boolean;
+  onClose: () => void;
+}
+
+const DownloadModal: React.FC<ModalProps> = ({ show, onClose }) => {
+  const [sessions, setSessions] = React.useState<string[]>([]);
+  const [loading, setLoading] = React.useState<boolean>(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (show) {
+      // Fetch the list of session folders when the modal is shown
+      const fetchSessions = async () => {
+        try {
+          setLoading(true);
+          const response = await fetch("/api/list-sessions"); // Use the updated endpoint for session folders
+          if (!response.ok) {
+            throw new Error("Failed to fetch session list");
+          }
+          const data = await response.json();
+          setSessions(data.sessions); // Store the session folder names
+        } catch (error) {
+          setError("Failed to load sessions");
+          console.error("Error fetching sessions:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchSessions();
+    }
+  }, [show]);
+
+  const handleDownloadClick = async (session: string) => {
+    try {
+      const response = await fetch(`/api/download-folder/${session}`);
+      if (!response.ok) {
+        throw new Error("Failed to download folder");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${session}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading folder:", error);
+      alert("Failed to download the folder. Please try again.");
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <div style={modalOverlayStyle}>
+      <div style={modalStyle}>
+        <h2>Session Download</h2>
+        {loading ? (
+          <p>Loading sessions...</p>
+        ) : error ? (
+          <p>{error}</p>
+        ) : sessions.length === 0 ? (
+          <p>No sessions available for download</p>
+        ) : (
+          <>
+            <p>Select a session to download:</p>
+            <div style={listContainerStyle}>
+              <ul>
+                {sessions.map((session) => (
+                  <ol key={session}>
+                    <button
+                      onClick={() => handleDownloadClick(session)}
+                      style={buttonStyle}
+                    >
+                      {session}
+                    </button>
+                  </ol>
+                ))}
+              </ul>
+            </div>
+          </>
+        )}
+        <button onClick={onClose} style={closeButtonStyle}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
+  const [sessionName, setSessionName] = React.useState("");
+
+  const handleSaveClick = async () => {
+    if (!sessionName.trim()) {
+      alert("Please enter a session name.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/save-session/${sessionName}`, {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        console.log("Session saved successfully.");
+        onClose();
+      } else {
+        console.error("Failed to save session.");
+      }
+    } catch (err) {
+      console.error("Error saving session:", err);
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <div style={modalOverlayStyle}>
+      <div style={modalStyle}>
+        <h2>Save Session</h2>
+        <p>Do you want to save the session before exiting?</p>
+        <label htmlFor="session-name">Session Name:</label>
+        <input
+          id="session-name"
+          type="text"
+          placeholder="Enter session name..."
+          value={sessionName}
+          onChange={(e) => setSessionName(e.target.value)}
+          style={{
+            width: "100%",
+            padding: "8px",
+            marginTop: "8px",
+            border: "1px solid #ccc",
+            borderRadius: "4px",
+          }}
+        />
+        <button onClick={handleSaveClick} style={buttonStyle}>
+          Save
+        </button>
+        <button onClick={onClose} style={closeButtonStyle}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const modalOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+};
+
+const modalStyle: React.CSSProperties = {
+  background: "white",
+  padding: "20px",
+  borderRadius: "8px",
+  textAlign: "center",
+  width: "300px",
+};
+
+const listContainerStyle: React.CSSProperties = {
+  maxHeight: "200px", // Set a max height for the list container
+  overflowY: "auto", // Enable scrolling within the list container
+  marginBottom: "10px", // Optional: Add space at the bottom of the list
+};
+
+const buttonStyle: React.CSSProperties = {
+  margin: "5px 0",
+  padding: "10px 15px",
+  width: "100%",
+  textAlign: "center",
+  cursor: "pointer",
+};
+
+const closeButtonStyle: React.CSSProperties = {
+  marginTop: "20px",
+  padding: "10px 15px",
+  cursor: "pointer",
+};
+
 export const DmMap = (props: {
   map: dmMap_DMMapFragment$key;
   password: string;
@@ -733,6 +926,50 @@ export const DmMap = (props: {
       }),
       [map.grid]
     );
+
+  const [isRecording, setIsRecording] = React.useState(false);
+  const handleClick = async () => {
+    console.log("recording clicked");
+    try {
+      const response = await fetch("/api/recording", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Update the local state based on the response
+        setIsRecording(data.recording === "recording");
+      } else {
+        console.error("Failed to update recording state");
+      }
+    } catch (err) {
+      console.error("Error making API request:", err);
+    }
+  };
+
+  const [isDownloadModalVisible, setDownloadModalVisible] =
+    React.useState(false);
+  const [isSaveModalVisible, setSaveModalVisible] = React.useState(false);
+
+  const openDownloadModal = async () => {
+    setDownloadModalVisible(true);
+  };
+
+  const closeDownloadModal = () => {
+    setDownloadModalVisible(false);
+  };
+
+  const openSaveModal = async () => {
+    setSaveModalVisible(true);
+  };
+
+  const closeSaveModal = () => {
+    setSaveModalVisible(false);
+  };
 
   return (
     <FlatContextProvider
@@ -932,6 +1169,25 @@ export const DmMap = (props: {
                   </Toolbar.Button>
                 </Toolbar.Item>
                 <Toolbar.Item isActive>
+                  <Toolbar.Button onClick={openDownloadModal}>
+                    <Icon.Download boxSize="20px" />
+                    <Icon.Label>Download Session</Icon.Label>
+                  </Toolbar.Button>
+                </Toolbar.Item>
+                {/* DownloadModal Component */}
+                <DownloadModal
+                  show={isDownloadModalVisible}
+                  onClose={closeDownloadModal}
+                />
+                <Toolbar.Item isActive>
+                  <Toolbar.Button onClick={openSaveModal}>
+                    <Icon.Save boxSize="20px" />
+                    <Icon.Label>Save Session</Icon.Label>
+                  </Toolbar.Button>
+                </Toolbar.Item>
+                {/* SaveModal Component */}
+                <SaveModal show={isSaveModalVisible} onClose={closeSaveModal} />
+                <Toolbar.Item isActive>
                   <Toolbar.Button
                     onClick={() => {
                       props.openMediaLibrary();
@@ -1020,6 +1276,14 @@ export const DmMap = (props: {
                   >
                     <Icon.Send boxSize="20px" />
                     <Icon.Label>Send</Icon.Label>
+                  </Toolbar.Button>
+                </Toolbar.Item>
+                <Toolbar.Item isActive>
+                  <Toolbar.Button onClick={handleClick}>
+                    <Icon.Camera boxSize="20px" />
+                    <Icon.Label>
+                      {isRecording ? "Stop" : "Start"} Recording
+                    </Icon.Label>
                   </Toolbar.Button>
                 </Toolbar.Item>
               </Toolbar.Group>
