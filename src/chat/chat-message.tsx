@@ -47,6 +47,7 @@ const AuthorName = styled.div`
 type ReactComponent = (props: any) => React.ReactElement | null;
 
 const { sanitizeHtml, components } = (() => {
+  // 1) Add "a" to allowedTags
   const allowedTags = [
     "div",
     "blockquote",
@@ -57,12 +58,15 @@ const { sanitizeHtml, components } = (() => {
     "code",
     "img",
     "FormattedDiceRoll",
+    "a",
   ];
 
+  // 2) Add relevant attributes for "a" to allowedAttributes
   const allowedAttributes: Record<string, Array<string>> = {
     span: ["style"],
     div: ["style"],
     img: ["src"],
+    a: ["href", "target", "title", "rel"],
     FormattedDiceRoll: ["index", "reference"],
   };
 
@@ -88,9 +92,7 @@ const { sanitizeHtml, components } = (() => {
       allowedTags,
       allowedAttributes,
       transformTags: {
-        // since our p element could also contain div elements and that makes react/the browser go brrrt
-        // we simply convert them to div elements for now
-        // in the future we might have a better solution.
+        // Convert <p> to <div> to avoid nested <p> <div> conflicts
         p: "div",
       },
       selfClosing: ["FormattedDiceRoll"],
@@ -102,8 +104,20 @@ const { sanitizeHtml, components } = (() => {
   return { sanitizeHtml, components };
 })();
 
+// A simple text renderer for operational messages, *with* linkify options
 const TextRenderer: React.FC<{ text: string }> = ({ text }) => {
-  return <MarkdownView markdown={text} sanitizeHtml={sanitizeHtml} />;
+  return (
+    <MarkdownView
+      markdown={text}
+      sanitizeHtml={sanitizeHtml}
+      // 3) Add showdown options that auto-link URLs
+      options={{
+        simplifiedAutoLink: true,
+        openLinksInNewTab: true,
+        simpleLineBreaks: true,
+      }}
+    />
+  );
 };
 
 type DiceRollResultArray = Extract<
@@ -191,11 +205,17 @@ const UserMessageRenderer = ({
             </Popover>
           ) : null}
         </HStack>
+        {/*
+            3) Also add linkify options here so that
+            normal URLs become links in user messages
+        */}
         <MarkdownView
           markdown={markdown}
           components={{ ...chatMessageComponents, FormattedDiceRoll }}
           sanitizeHtml={sanitizeHtml}
           options={{
+            simplifiedAutoLink: true,
+            openLinksInNewTab: true,
             simpleLineBreaks: true,
           }}
         />
@@ -319,6 +339,7 @@ const ChatMessageRenderer: React.FC<{
     case "OperationalChatMessage":
       return (
         <Container>
+          {/* Renders an operational message (like system notifications) */}
           <TextRenderer text={message.content} />
         </Container>
       );
