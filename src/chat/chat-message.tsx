@@ -37,6 +37,10 @@ const Container = styled.div`
   > * {
     line-height: 24px;
   }
+  /* Force anchor tags to be blue */
+  a {
+    color: blue !important;
+  }
 `;
 
 const AuthorName = styled.div`
