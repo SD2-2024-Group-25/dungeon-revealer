@@ -74,8 +74,10 @@ const { sanitizeHtml, components } = (() => {
     FormattedDiceRoll: ["index", "reference"],
   };
 
+  // Step A: create an empty 'components' object
   const components: Record<string, ReactComponent> = {};
 
+  // Step B: populate from chatMessageComponents
   for (const [name, config] of Object.entries(chatMessageComponents)) {
     if (typeof config === "function") {
       allowedTags.push(name);
@@ -91,12 +93,35 @@ const { sanitizeHtml, components } = (() => {
     }
   }
 
+  // Step C: define your CustomLink
+  const CustomLink: ReactComponent = ({ href, children, ...rest }) => {
+    const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+      // Example: match your #room link pattern
+      if (href?.includes("google.com")) {
+        event.preventDefault();
+        // e.g., post a message or do something custom
+        window.parent.postMessage({ type: "OPEN_EXCALIDRAW" }, "*");
+      }
+      // otherwise, let default happen (or handle differently)
+    };
+
+    return (
+      <a href={href} onClick={handleClick} {...rest}>
+        {children}
+      </a>
+    );
+  };
+
+  // Step D: register the custom link
+  components.a = CustomLink;
+
+  // Step E: define sanitizeHtml
   const sanitizeHtml = (html: string) =>
     _sanitizeHtml(html, {
       allowedTags,
       allowedAttributes,
       transformTags: {
-        // Convert <p> to <div> to avoid nested <p> <div> conflicts
+        // Convert <p> to <div>
         p: "div",
       },
       selfClosing: ["FormattedDiceRoll"],
@@ -105,6 +130,7 @@ const { sanitizeHtml, components } = (() => {
       },
     });
 
+  // Step F: return them
   return { sanitizeHtml, components };
 })();
 
@@ -215,7 +241,7 @@ const UserMessageRenderer = ({
         */}
         <MarkdownView
           markdown={markdown}
-          components={{ ...chatMessageComponents, FormattedDiceRoll }}
+          components={{ ...components, FormattedDiceRoll }}
           sanitizeHtml={sanitizeHtml}
           options={{
             simplifiedAutoLink: true,

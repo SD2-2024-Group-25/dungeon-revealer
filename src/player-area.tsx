@@ -108,6 +108,55 @@ const PlayerMap = ({
   const clearCollaborationLink = () => {
     localStorage.removeItem("collaborationLink");
   };
+  React.useEffect(
+    () => {
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data.type === "UPDATE_COLLABORATION_LINK") {
+          const { link } = event.data.payload;
+          if (link) {
+            saveCollaborationLink(link);
+          } else {
+            clearCollaborationLink();
+          }
+        }
+
+        // NEW: Handle “OPEN_EXCALIDRAW” inside same effect
+        if (event.data.type === "OPEN_EXCALIDRAW") {
+          try {
+            const user = userSession.getUser();
+            if (!user) {
+              throw new Error("User data not available");
+            }
+
+            const excalidrawUrl = import.meta.env.VITE_EXCALIDRAW_URL;
+            const url = new URL(excalidrawUrl);
+
+            // Add username/userID as query params
+            url.searchParams.append("username", user.name);
+            url.searchParams.append("userID", user.id);
+
+            // Possibly copy a saved collaboration link
+            const savedCollabLink = getCollaborationLink();
+            if (savedCollabLink) {
+              const collabUrl = new URL(savedCollabLink);
+              url.hash = collabUrl.hash;
+            }
+
+            setIframeUrl(url.toString());
+            setIsIframeOpen(true);
+          } catch (error) {
+            console.error("Error opening drawing:", error);
+          }
+        }
+      };
+
+      window.addEventListener("message", handleMessage);
+      return () => window.removeEventListener("message", handleMessage);
+    },
+    [
+      /* dependencies like setIframeUrl, userSession, etc. */
+    ]
+  );
 
   React.useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
