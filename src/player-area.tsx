@@ -110,8 +110,8 @@ const PlayerMap = ({
   };
   React.useEffect(
     () => {
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data.type === "UPDATE_COLLABORATION_LINK") {
+      function handleMessage(event: MessageEvent) {
+        if (event.data?.type === "UPDATE_COLLABORATION_LINK") {
           const { link } = event.data.payload;
           if (link) {
             saveCollaborationLink(link);
@@ -120,41 +120,51 @@ const PlayerMap = ({
           }
         }
 
-        // NEW: Handle “OPEN_EXCALIDRAW” inside same effect
-        if (event.data.type === "OPEN_EXCALIDRAW") {
+        if (event.data?.type === "OPEN_EXCALIDRAW") {
           try {
             const user = userSession.getUser();
             if (!user) {
               throw new Error("User data not available");
             }
 
+            // 1) Base Excalidraw server URL
             const excalidrawUrl = import.meta.env.VITE_EXCALIDRAW_URL;
             const url = new URL(excalidrawUrl);
 
-            // Add username/userID as query params
+            // 2) Add user-specific query params
             url.searchParams.append("username", user.name);
             url.searchParams.append("userID", user.id);
 
-            // Possibly copy a saved collaboration link
-            const savedCollabLink = getCollaborationLink();
-            if (savedCollabLink) {
-              const collabUrl = new URL(savedCollabLink);
-              url.hash = collabUrl.hash;
+            // 3) Grab the clicked link from the chat
+            const clickedLink = event.data.payload?.href;
+            if (clickedLink) {
+              // Parse the full URL so we can get the entire "#room=..."
+              const parsedLink = new URL(clickedLink, window.location.origin);
+              // Copy the entire hash (including the comma + encryption key)
+              url.hash = parsedLink.hash;
+            } else {
+              // Fallback if no link was supplied (use your saved link)
+              const savedCollabLink = getCollaborationLink();
+              if (savedCollabLink) {
+                const collabUrl = new URL(savedCollabLink);
+                url.hash = collabUrl.hash;
+              }
             }
 
+            // 4) Open the final URL in your iframe
             setIframeUrl(url.toString());
             setIsIframeOpen(true);
           } catch (error) {
             console.error("Error opening drawing:", error);
           }
         }
-      };
+      }
 
       window.addEventListener("message", handleMessage);
       return () => window.removeEventListener("message", handleMessage);
     },
     [
-      /* dependencies like setIframeUrl, userSession, etc. */
+      /*setIframeUrl, userSession  etc. */
     ]
   );
 

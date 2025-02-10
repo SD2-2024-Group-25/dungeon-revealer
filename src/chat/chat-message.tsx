@@ -32,6 +32,31 @@ import type { chatMessage_message } from "./__generated__/chatMessage_message.gr
 import { chatMessage_SharedResourceChatMessageFragment$key } from "./__generated__/chatMessage_SharedResourceChatMessageFragment.graphql";
 import { DiceRoll, FormattedDiceRoll } from "./formatted-dice-roll";
 
+function linkifyRoomUrls(rawText: string) {
+  return rawText.replace(
+    /(^|\s)((https?:\/\/)?[^\s]+?#room=[^\s]+)/g,
+    (_match, prefix, url) => {
+      let finalUrl = url;
+      // If no scheme, add "http://"
+      if (!finalUrl.startsWith("http://") && !finalUrl.startsWith("https://")) {
+        finalUrl = "http://" + finalUrl;
+      }
+      return `${prefix}[${url}](${finalUrl})`;
+    }
+  );
+}
+
+function convertRoomHashToLink(rawText: string): string {
+  return rawText.replace(
+    /(#room=[^\s]+)/g, // <--- removed (^|\s)
+    (fullMatch) => {
+      const roomRef = fullMatch; // e.g. "#room=abcdef"
+      const link = `http://localhost:5000/${roomRef}`;
+      // or do "[http://localhost:5000/#room=abc](http://localhost:5000/#room=abc)"
+      return `[${roomRef}](${link})`;
+    }
+  );
+}
 const Container = styled.div`
   padding-bottom: 4px;
   > * {
@@ -96,13 +121,19 @@ const { sanitizeHtml, components } = (() => {
   // Step C: define your CustomLink
   const CustomLink: ReactComponent = ({ href, children, ...rest }) => {
     const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-      // Example: match your #room link pattern
-      if (href?.includes("google.com")) {
+      if (href?.includes("#room=")) {
         event.preventDefault();
-        // e.g., post a message or do something custom
-        window.parent.postMessage({ type: "OPEN_EXCALIDRAW" }, "*");
+        // Instead of letting normal navigation happen, send the link to the parent
+        window.parent.postMessage(
+          {
+            type: "OPEN_EXCALIDRAW",
+            payload: {
+              href,
+            },
+          },
+          "*"
+        );
       }
-      // otherwise, let default happen (or handle differently)
     };
 
     return (
@@ -144,6 +175,7 @@ const TextRenderer: React.FC<{ text: string }> = ({ text }) => {
       options={{
         simplifiedAutoLink: true,
         openLinksInNewTab: true,
+        literalMidWordUnderscores: true,
         simpleLineBreaks: true,
       }}
     />
@@ -179,14 +211,23 @@ const UserMessageRenderer = ({
   diceRolls: DiceRollResultArray;
   referencedDiceRolls: DiceRollResultArray;
 }) => {
-  const markdown = React.useMemo(
+  // Step A: Insert <FormattedDiceRoll> for dice placeholders
+  const replacedDiceContent = React.useMemo(
     () =>
       content.replace(
         /{(r)?(\d*)}/g,
-        // prettier-ignore
-        (_, isReferenced, index) => `<FormattedDiceRoll index="${index}"${isReferenced ? ` reference="yes"` : ``} />`
+        (_, isReferenced, index) =>
+          `<FormattedDiceRoll index="${index}"${
+            isReferenced ? ` reference="yes"` : ``
+          } />`
       ),
     [content]
+  );
+
+  // Step B: Transform "#room=..." text into Markdown links
+  const finalContent = React.useMemo(
+    () => convertRoomHashToLink(replacedDiceContent),
+    [replacedDiceContent]
   );
 
   return (
@@ -235,17 +276,15 @@ const UserMessageRenderer = ({
             </Popover>
           ) : null}
         </HStack>
-        {/*
-            3) Also add linkify options here so that
-            normal URLs become links in user messages
-        */}
+
+        {/* Finally render the combined text in MarkdownView */}
         <MarkdownView
-          markdown={markdown}
+          markdown={finalContent}
           components={{ ...components, FormattedDiceRoll }}
           sanitizeHtml={sanitizeHtml}
           options={{
             simplifiedAutoLink: true,
-            openLinksInNewTab: true,
+            openLinksInNewTab: false,
             simpleLineBreaks: true,
           }}
         />
