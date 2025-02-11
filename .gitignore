@@ -20,8 +20,12 @@ server/version.ts
 
 # Runtime Data/ Persisted Data #
 ################################
-data
+data/files
+data/maps
+data/db.sqlite
+data/settings.json
 !data/defaultmaps/
+
 
 # Research Data Download/Upload #
 public/research/downloads
