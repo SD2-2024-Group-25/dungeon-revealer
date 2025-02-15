@@ -12,6 +12,7 @@ export const useSelectFolderDialog = (
   ) => void
 ): [React.ReactNode, ShowFileDialogFunction] => {
   const ref = React.useRef<HTMLInputElement>(null);
+  const folderNameRef = React.useRef<string>("");
 
   const onChange = React.useCallback(
     async (ev: React.ChangeEvent<HTMLInputElement>) => {
@@ -22,22 +23,23 @@ export const useSelectFolderDialog = (
       const pngFiles = files.filter((file) => file.name.endsWith(".png"));
 
       if (jsonFile && pngFiles.length === 3) {
-        //Makes sure correct files are inputted, may add modal/error popup for this
-        const jsonText = await jsonFile.text();
-        const jsonData = JSON.parse(jsonText);
+        let jsonText = await jsonFile.text();
+        let jsonData = JSON.parse(jsonText);
 
-        const folderName = jsonData.id;
+        folderNameRef.current = jsonData.title;
+
         const modifyJson = (newTitle: string): File => {
-          //Changes title
           jsonData.title = newTitle;
+          jsonData.id = newTitle;
+          folderNameRef.current = newTitle;
           return new File([JSON.stringify(jsonData, null, 2)], jsonFile.name, {
             type: "application/json",
           });
         };
 
-        onSelect([jsonFile, ...pngFiles], folderName, modifyJson);
+        onSelect([jsonFile, ...pngFiles], folderNameRef.current, modifyJson);
       } else {
-        console.error("Please select one .json file and three .png files.");
+        console.error("Please select one .json file and three image files.");
       }
     },
     [onSelect]
@@ -49,7 +51,7 @@ export const useSelectFolderDialog = (
       <input
         type="file"
         multiple
-        accept=".json,.png"
+        accept=".json,.png,.jpg,.jpeg"
         ref={ref}
         onChange={onChange}
         style={{ display: "none" }}

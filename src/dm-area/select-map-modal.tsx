@@ -88,16 +88,17 @@ const CreateNewScenarioButton = ({
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
-
   const handleModalSubmit = (newTitle: string) => {
     if (selectedFiles && modifyJsonFunc) {
       const updatedJsonFile = modifyJsonFunc(newTitle);
+      setFolderName(newTitle);
+
       onUploadScenario(
         [
           updatedJsonFile,
           ...selectedFiles.filter((file) => !file.name.endsWith(".json")),
         ],
-        folderName as string
+        newTitle
       );
     }
     closeModal();
