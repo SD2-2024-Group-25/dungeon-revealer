@@ -32,7 +32,7 @@ const MAPS_DIR = "../data/maps";
 //uploadScenario function used with selectFolderDialog for uploading scenario to DR
 const uploadScenario = async (
   files: File[],
-  //parentFolder: string,
+  parentFolder: string,
   folderName: string
 ): Promise<void> => {
   const formattedFiles = await Promise.all(
@@ -45,8 +45,8 @@ const uploadScenario = async (
   const response = await fetch("/api/upload/scenario", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ files: formattedFiles, folderName }),
-    //body: JSON.stringify({ files: formattedFiles, parentFolder, folderName }),
+    //body: JSON.stringify({ files: formattedFiles, folderName }),
+    body: JSON.stringify({ files: formattedFiles, parentFolder, folderName }),
   });
 
   if (response.ok) {
@@ -616,8 +616,8 @@ export const SelectMapModal = ({
                   tabIndex={1}
                   fullWidth
                   onUploadScenario={(files, folderName) => {
-                    uploadScenario(files, folderName);
-                    //uploadScenario(files, "maps", folderName);
+                    //uploadScenario(files, folderName);
+                    uploadScenario(files, "maps", folderName);
                   }}
                 >
                   <>
@@ -858,8 +858,8 @@ export const SelectScenarioModal = ({
                 tabIndex={1}
                 fullWidth
                 onUploadScenario={(files, folderName) => {
-                  uploadScenario(files, folderName);
-                  //uploadScenario(files, "defaultmaps", folderName);
+                  //uploadScenario(files, folderName);
+                  uploadScenario(files, "defaultmaps", folderName);
                 }}
               >
                 <>
