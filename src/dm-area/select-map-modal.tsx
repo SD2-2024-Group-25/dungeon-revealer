@@ -20,6 +20,7 @@ import { selectMapModal_ActiveMap_MapFragment$key } from "./__generated__/select
 import { selectMapModal_ActiveMapQuery } from "./__generated__/selectMapModal_ActiveMapQuery.graphql";
 
 import { useSelectFolderDialog } from "../hooks/use-select-folder-dialog"; // This is for "folder" selection, but just prompts 4 files (1 json, 3 png)
+import { ModalFooter } from "@chakra-ui/react";
 /*
 import React2, { useState, useEffect } from "react";
 import fs from "fs";
@@ -31,6 +32,7 @@ const MAPS_DIR = "../data/maps";
 //uploadScenario function used with selectFolderDialog for uploading scenario to DR
 const uploadScenario = async (
   files: File[],
+  //parentFolder: string,
   folderName: string
 ): Promise<void> => {
   const formattedFiles = await Promise.all(
@@ -44,6 +46,7 @@ const uploadScenario = async (
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ files: formattedFiles, folderName }),
+    //body: JSON.stringify({ files: formattedFiles, parentFolder, folderName }),
   });
 
   if (response.ok) {
@@ -57,6 +60,7 @@ const uploadScenario = async (
 type CreateNewMapButtonProps2 = {
   children: React.ReactChild;
   onUploadScenario: (files: File[], folderName: string) => void;
+  //onUploadScenario: (files: File[], parentFolder: string, folderName: string) => void;
 } & Pick<
   React.ComponentProps<typeof Button.Primary>,
   "tabIndex" | "fullWidth" | "big"
@@ -98,6 +102,7 @@ const CreateNewScenarioButton = ({
           updatedJsonFile,
           ...selectedFiles.filter((file) => !file.name.endsWith(".json")),
         ],
+        //parentFolder,
         newTitle
       );
     }
@@ -513,7 +518,6 @@ export const SelectMapModal = ({
             <div style={{ marginLeft: "100px" }}>
               <SelectDefaultButton
                 tabIndex={1}
-                //Gotta move the button over
                 fullWidth
                 setSelectedFolder={(folder) => {
                   console.log("Selected Folder:", folder);
@@ -613,6 +617,7 @@ export const SelectMapModal = ({
                   fullWidth
                   onUploadScenario={(files, folderName) => {
                     uploadScenario(files, folderName);
+                    //uploadScenario(files, "maps", folderName);
                   }}
                 >
                   <>
@@ -846,6 +851,26 @@ export const SelectScenarioModal = ({
               )}
             </Modal.Aside>
           </Modal.Body>
+          {/* Button to add new default scenario */}
+          <div style={{ marginLeft: "0%", width: "30%" }}>
+            <Modal.Footer>
+              <CreateNewScenarioButton
+                tabIndex={1}
+                fullWidth
+                onUploadScenario={(files, folderName) => {
+                  uploadScenario(files, folderName);
+                  //uploadScenario(files, "defaultmaps", folderName);
+                }}
+              >
+                <>
+                  <Icon.Plus boxSize="20px" />
+                  <span style={{ fontSize: "10px" }}>
+                    Add New Default Scenario
+                  </span>
+                </>
+              </CreateNewScenarioButton>
+            </Modal.Footer>
+          </div>
         </Modal.Dialog>
       </Modal>
 
