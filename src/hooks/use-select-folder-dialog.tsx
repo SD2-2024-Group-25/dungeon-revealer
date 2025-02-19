@@ -40,7 +40,7 @@ export const useSelectFolderDialog = (
           });
         };
 
-        onSelect([jsonFile, ...imageFiles], folderName, modifyJson);
+        onSelect([jsonFile, ...imageFiles], folderNameRef.current, modifyJson);
       } else {
         console.error(
           "Please select one .json file and three image files (png, jpg, jpeg, gif, webp)."
