@@ -12,6 +12,7 @@ export const useSelectFolderDialog = (
   ) => void
 ): [React.ReactNode, ShowFileDialogFunction] => {
   const ref = React.useRef<HTMLInputElement>(null);
+  const folderNameRef = React.useRef<string>("");
 
   const onChange = React.useCallback(
     async (ev: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,7 +31,6 @@ export const useSelectFolderDialog = (
         const jsonText = await jsonFile.text();
         const jsonData = JSON.parse(jsonText);
 
-        const folderName = jsonData.id;
         const modifyJson = (newTitle: string): File => {
           // Modify the JSON title
           jsonData.title = newTitle;

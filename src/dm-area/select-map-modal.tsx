@@ -20,6 +20,7 @@ import { selectMapModal_ActiveMap_MapFragment$key } from "./__generated__/select
 import { selectMapModal_ActiveMapQuery } from "./__generated__/selectMapModal_ActiveMapQuery.graphql";
 
 import { useSelectFolderDialog } from "../hooks/use-select-folder-dialog"; // This is for "folder" selection, but just prompts 4 files (1 json, 3 png)
+import { ModalFooter } from "@chakra-ui/react";
 /*
 import React2, { useState, useEffect } from "react";
 import fs from "fs";
@@ -31,6 +32,7 @@ const MAPS_DIR = "../data/maps";
 //uploadScenario function used with selectFolderDialog for uploading scenario to DR
 const uploadScenario = async (
   files: File[],
+  parentFolder: string,
   folderName: string
 ): Promise<void> => {
   const formattedFiles = await Promise.all(
@@ -43,7 +45,8 @@ const uploadScenario = async (
   const response = await fetch("/api/upload/scenario", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ files: formattedFiles, folderName }),
+    //body: JSON.stringify({ files: formattedFiles, folderName }),
+    body: JSON.stringify({ files: formattedFiles, parentFolder, folderName }),
   });
 
   if (response.ok) {
@@ -57,6 +60,7 @@ const uploadScenario = async (
 type CreateNewMapButtonProps2 = {
   children: React.ReactChild;
   onUploadScenario: (files: File[], folderName: string) => void;
+  //onUploadScenario: (files: File[], parentFolder: string, folderName: string) => void;
 } & Pick<
   React.ComponentProps<typeof Button.Primary>,
   "tabIndex" | "fullWidth" | "big"
@@ -88,16 +92,17 @@ const CreateNewScenarioButton = ({
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
-
   const handleModalSubmit = (newTitle: string) => {
     if (selectedFiles && modifyJsonFunc) {
       const updatedJsonFile = modifyJsonFunc(newTitle);
+      setFolderName(newTitle);
+
       onUploadScenario(
         [
           updatedJsonFile,
           ...selectedFiles.filter((file) => !file.name.endsWith(".json")),
         ],
-        folderName as string
+        newTitle
       );
     }
     closeModal();
@@ -512,7 +517,6 @@ export const SelectMapModal = ({
             <div style={{ marginLeft: "100px" }}>
               <SelectDefaultButton
                 tabIndex={1}
-                //Gotta move the button over
                 fullWidth
                 setSelectedFolder={(folder) => {
                   console.log("Selected Folder:", folder);
@@ -611,7 +615,8 @@ export const SelectMapModal = ({
                   tabIndex={1}
                   fullWidth
                   onUploadScenario={(files, folderName) => {
-                    uploadScenario(files, folderName);
+                    //uploadScenario(files, folderName);
+                    uploadScenario(files, "maps", folderName);
                   }}
                 >
                   <>
@@ -828,13 +833,20 @@ export const SelectScenarioModal = ({
                         cursor: "pointer",
                         backgroundColor:
                           selectedScenario === scenario
-                            ? "#ddd"
+                            ? "#ccc"
                             : "transparent",
+                        transition: "background-color 0.2s",
                       }}
-                      onClick={() => {
-                        setSelectedScenario(scenario);
-                        setShowNamingModal(true);
-                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.backgroundColor = "#ddd")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          selectedScenario === scenario
+                            ? "#ccc"
+                            : "transparent")
+                      }
+                      onClick={() => setSelectedScenario(scenario)}
                     >
                       <Icon.Map boxSize="20px" /> {scenario}
                     </li>
@@ -845,17 +857,58 @@ export const SelectScenarioModal = ({
               )}
             </Modal.Aside>
           </Modal.Body>
+
+          <Modal.Footer
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "200px",
+            }}
+          >
+            {/* Add New Default Scenario Button */}
+            <div style={{ flex: 1, maxWidth: "200px" }}>
+              <CreateNewScenarioButton
+                tabIndex={1}
+                fullWidth
+                onUploadScenario={(files, folderName) => {
+                  uploadScenario(files, "defaultmaps", folderName);
+                }}
+              >
+                <>
+                  <Icon.Plus boxSize="20px" />
+                  <span style={{ fontSize: "10px" }}>
+                    Add New Default Scenario
+                  </span>
+                </>
+              </CreateNewScenarioButton>
+            </div>
+
+            {/* Delete Button */}
+            <div style={{ flex: 1, maxWidth: "200px" }}></div>
+
+            {/* Load Scenario Button */}
+            {selectedScenario && (
+              <div style={{ flex: 0.5, maxWidth: "150px" }}>
+                <Button.Primary
+                  tabIndex={1}
+                  onClick={() => setShowNamingModal(true)}
+                >
+                  Load Scenario
+                </Button.Primary>
+              </div>
+            )}
+          </Modal.Footer>
         </Modal.Dialog>
       </Modal>
 
-      {/* Show the naming modal when a scenario is selected */}
+      {/* Show the naming modal when Load Scenario is clicked */}
       {showNamingModal && selectedScenario && (
         <CreateNewScenarioModal
           closeModal={() => setShowNamingModal(false)}
           onSubmit={(newScenarioName) => {
             onCreateScenario(selectedScenario, newScenarioName);
             setShowNamingModal(false);
-            //changeID(newScenarioName);
           }}
         />
       )}
