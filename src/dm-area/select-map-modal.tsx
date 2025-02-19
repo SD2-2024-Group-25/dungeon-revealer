@@ -102,7 +102,6 @@ const CreateNewScenarioButton = ({
           updatedJsonFile,
           ...selectedFiles.filter((file) => !file.name.endsWith(".json")),
         ],
-        //parentFolder,
         newTitle
       );
     }
@@ -834,13 +833,20 @@ export const SelectScenarioModal = ({
                         cursor: "pointer",
                         backgroundColor:
                           selectedScenario === scenario
-                            ? "#ddd"
+                            ? "#ccc"
                             : "transparent",
+                        transition: "background-color 0.2s",
                       }}
-                      onClick={() => {
-                        setSelectedScenario(scenario);
-                        setShowNamingModal(true);
-                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.backgroundColor = "#ddd")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          selectedScenario === scenario
+                            ? "#ccc"
+                            : "transparent")
+                      }
+                      onClick={() => setSelectedScenario(scenario)}
                     >
                       <Icon.Map boxSize="20px" /> {scenario}
                     </li>
@@ -851,14 +857,21 @@ export const SelectScenarioModal = ({
               )}
             </Modal.Aside>
           </Modal.Body>
-          {/* Button to add new default scenario */}
-          <div style={{ marginLeft: "0%", width: "30%" }}>
-            <Modal.Footer>
+
+          <Modal.Footer
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "200px",
+            }}
+          >
+            {/* Add New Default Scenario Button */}
+            <div style={{ flex: 1, maxWidth: "200px" }}>
               <CreateNewScenarioButton
                 tabIndex={1}
                 fullWidth
                 onUploadScenario={(files, folderName) => {
-                  //uploadScenario(files, folderName);
                   uploadScenario(files, "defaultmaps", folderName);
                 }}
               >
@@ -869,19 +882,33 @@ export const SelectScenarioModal = ({
                   </span>
                 </>
               </CreateNewScenarioButton>
-            </Modal.Footer>
-          </div>
+            </div>
+
+            {/* Delete Button */}
+            <div style={{ flex: 1, maxWidth: "200px" }}></div>
+
+            {/* Load Scenario Button */}
+            {selectedScenario && (
+              <div style={{ flex: 0.5, maxWidth: "150px" }}>
+                <Button.Primary
+                  tabIndex={1}
+                  onClick={() => setShowNamingModal(true)}
+                >
+                  Load Scenario
+                </Button.Primary>
+              </div>
+            )}
+          </Modal.Footer>
         </Modal.Dialog>
       </Modal>
 
-      {/* Show the naming modal when a scenario is selected */}
+      {/* Show the naming modal when Load Scenario is clicked */}
       {showNamingModal && selectedScenario && (
         <CreateNewScenarioModal
           closeModal={() => setShowNamingModal(false)}
           onSubmit={(newScenarioName) => {
             onCreateScenario(selectedScenario, newScenarioName);
             setShowNamingModal(false);
-            //changeID(newScenarioName);
           }}
         />
       )}
