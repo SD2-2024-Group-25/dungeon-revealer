@@ -108,6 +108,65 @@ const PlayerMap = ({
   const clearCollaborationLink = () => {
     localStorage.removeItem("collaborationLink");
   };
+  React.useEffect(
+    () => {
+      function handleMessage(event: MessageEvent) {
+        if (event.data?.type === "UPDATE_COLLABORATION_LINK") {
+          const { link } = event.data.payload;
+          if (link) {
+            saveCollaborationLink(link);
+          } else {
+            clearCollaborationLink();
+          }
+        }
+
+        if (event.data?.type === "OPEN_EXCALIDRAW") {
+          try {
+            const user = userSession.getUser();
+            if (!user) {
+              throw new Error("User data not available");
+            }
+
+            // 1) Base Excalidraw server URL
+            const excalidrawUrl = import.meta.env.VITE_EXCALIDRAW_URL;
+            const url = new URL(excalidrawUrl);
+
+            // 2) Add user-specific query params
+            url.searchParams.append("username", user.name);
+            url.searchParams.append("userID", user.id);
+
+            // 3) Grab the clicked link from the chat
+            const clickedLink = event.data.payload?.href;
+            if (clickedLink) {
+              // Parse the full URL so we can get the entire "#room=..."
+              const parsedLink = new URL(clickedLink, window.location.origin);
+              // Copy the entire hash (including the comma + encryption key)
+              url.hash = parsedLink.hash;
+            } else {
+              // Fallback if no link was supplied (use your saved link)
+              const savedCollabLink = getCollaborationLink();
+              if (savedCollabLink) {
+                const collabUrl = new URL(savedCollabLink);
+                url.hash = collabUrl.hash;
+              }
+            }
+
+            // 4) Open the final URL in your iframe
+            setIframeUrl(url.toString());
+            setIsIframeOpen(true);
+          } catch (error) {
+            console.error("Error opening drawing:", error);
+          }
+        }
+      }
+
+      window.addEventListener("message", handleMessage);
+      return () => window.removeEventListener("message", handleMessage);
+    },
+    [
+      /*setIframeUrl, userSession  etc. */
+    ]
+  );
 
   React.useEffect(() => {
     const handleMessage = (event: MessageEvent) => {

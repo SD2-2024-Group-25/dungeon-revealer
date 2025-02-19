@@ -32,10 +32,39 @@ import type { chatMessage_message } from "./__generated__/chatMessage_message.gr
 import { chatMessage_SharedResourceChatMessageFragment$key } from "./__generated__/chatMessage_SharedResourceChatMessageFragment.graphql";
 import { DiceRoll, FormattedDiceRoll } from "./formatted-dice-roll";
 
+function linkifyRoomUrls(rawText: string) {
+  return rawText.replace(
+    /(^|\s)((https?:\/\/)?[^\s]+?#room=[^\s]+)/g,
+    (_match, prefix, url) => {
+      let finalUrl = url;
+      // If no scheme, add "http://"
+      if (!finalUrl.startsWith("http://") && !finalUrl.startsWith("https://")) {
+        finalUrl = "http://" + finalUrl;
+      }
+      return `${prefix}[${url}](${finalUrl})`;
+    }
+  );
+}
+
+function convertRoomHashToLink(rawText: string): string {
+  return rawText.replace(
+    /(#room=[^\s]+)/g, // <--- removed (^|\s)
+    (fullMatch) => {
+      const roomRef = fullMatch; // e.g. "#room=abcdef"
+      const link = `http://localhost:5000/${roomRef}`;
+      // or do "[http://localhost:5000/#room=abc](http://localhost:5000/#room=abc)"
+      return `[${roomRef}](${link})`;
+    }
+  );
+}
 const Container = styled.div`
   padding-bottom: 4px;
   > * {
     line-height: 24px;
+  }
+  /* Force anchor tags to be blue */
+  a {
+    color: blue !important;
   }
 `;
 
@@ -47,6 +76,7 @@ const AuthorName = styled.div`
 type ReactComponent = (props: any) => React.ReactElement | null;
 
 const { sanitizeHtml, components } = (() => {
+  // 1) Add "a" to allowedTags
   const allowedTags = [
     "div",
     "blockquote",
@@ -57,17 +87,22 @@ const { sanitizeHtml, components } = (() => {
     "code",
     "img",
     "FormattedDiceRoll",
+    "a",
   ];
 
+  // 2) Add relevant attributes for "a" to allowedAttributes
   const allowedAttributes: Record<string, Array<string>> = {
     span: ["style"],
     div: ["style"],
     img: ["src"],
+    a: ["href", "target", "title", "rel"],
     FormattedDiceRoll: ["index", "reference"],
   };
 
+  // Step A: create an empty 'components' object
   const components: Record<string, ReactComponent> = {};
 
+  // Step B: populate from chatMessageComponents
   for (const [name, config] of Object.entries(chatMessageComponents)) {
     if (typeof config === "function") {
       allowedTags.push(name);
@@ -83,14 +118,41 @@ const { sanitizeHtml, components } = (() => {
     }
   }
 
+  // Step C: define your CustomLink
+  const CustomLink: ReactComponent = ({ href, children, ...rest }) => {
+    const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+      if (href?.includes("#room=")) {
+        event.preventDefault();
+        // Instead of letting normal navigation happen, send the link to the parent
+        window.parent.postMessage(
+          {
+            type: "OPEN_EXCALIDRAW",
+            payload: {
+              href,
+            },
+          },
+          "*"
+        );
+      }
+    };
+
+    return (
+      <a href={href} onClick={handleClick} {...rest}>
+        {children}
+      </a>
+    );
+  };
+
+  // Step D: register the custom link
+  components.a = CustomLink;
+
+  // Step E: define sanitizeHtml
   const sanitizeHtml = (html: string) =>
     _sanitizeHtml(html, {
       allowedTags,
       allowedAttributes,
       transformTags: {
-        // since our p element could also contain div elements and that makes react/the browser go brrrt
-        // we simply convert them to div elements for now
-        // in the future we might have a better solution.
+        // Convert <p> to <div>
         p: "div",
       },
       selfClosing: ["FormattedDiceRoll"],
@@ -99,11 +161,25 @@ const { sanitizeHtml, components } = (() => {
       },
     });
 
+  // Step F: return them
   return { sanitizeHtml, components };
 })();
 
+// A simple text renderer for operational messages, *with* linkify options
 const TextRenderer: React.FC<{ text: string }> = ({ text }) => {
-  return <MarkdownView markdown={text} sanitizeHtml={sanitizeHtml} />;
+  return (
+    <MarkdownView
+      markdown={text}
+      sanitizeHtml={sanitizeHtml}
+      // 3) Add showdown options that auto-link URLs
+      options={{
+        simplifiedAutoLink: true,
+        openLinksInNewTab: true,
+        literalMidWordUnderscores: true,
+        simpleLineBreaks: true,
+      }}
+    />
+  );
 };
 
 type DiceRollResultArray = Extract<
@@ -135,14 +211,23 @@ const UserMessageRenderer = ({
   diceRolls: DiceRollResultArray;
   referencedDiceRolls: DiceRollResultArray;
 }) => {
-  const markdown = React.useMemo(
+  // Step A: Insert <FormattedDiceRoll> for dice placeholders
+  const replacedDiceContent = React.useMemo(
     () =>
       content.replace(
         /{(r)?(\d*)}/g,
-        // prettier-ignore
-        (_, isReferenced, index) => `<FormattedDiceRoll index="${index}"${isReferenced ? ` reference="yes"` : ``} />`
+        (_, isReferenced, index) =>
+          `<FormattedDiceRoll index="${index}"${
+            isReferenced ? ` reference="yes"` : ``
+          } />`
       ),
     [content]
+  );
+
+  // Step B: Transform "#room=..." text into Markdown links
+  const finalContent = React.useMemo(
+    () => convertRoomHashToLink(replacedDiceContent),
+    [replacedDiceContent]
   );
 
   return (
@@ -191,11 +276,15 @@ const UserMessageRenderer = ({
             </Popover>
           ) : null}
         </HStack>
+
+        {/* Finally render the combined text in MarkdownView */}
         <MarkdownView
-          markdown={markdown}
-          components={{ ...chatMessageComponents, FormattedDiceRoll }}
+          markdown={finalContent}
+          components={{ ...components, FormattedDiceRoll }}
           sanitizeHtml={sanitizeHtml}
           options={{
+            simplifiedAutoLink: true,
+            openLinksInNewTab: false,
             simpleLineBreaks: true,
           }}
         />
@@ -319,6 +408,7 @@ const ChatMessageRenderer: React.FC<{
     case "OperationalChatMessage":
       return (
         <Container>
+          {/* Renders an operational message (like system notifications) */}
           <TextRenderer text={message.content} />
         </Container>
       );
