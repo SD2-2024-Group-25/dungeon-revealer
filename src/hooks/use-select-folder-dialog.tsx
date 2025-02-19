@@ -20,26 +20,31 @@ export const useSelectFolderDialog = (
       ev.currentTarget.value = "";
 
       const jsonFile = files.find((file) => file.name.endsWith(".json"));
-      const pngFiles = files.filter((file) => file.name.endsWith(".png"));
 
-      if (jsonFile && pngFiles.length === 3) {
-        let jsonText = await jsonFile.text();
-        let jsonData = JSON.parse(jsonText);
+      const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".webp"];
+      const imageFiles = files.filter((file) =>
+        imageExtensions.some((ext) => file.name.toLowerCase().endsWith(ext))
+      );
 
-        folderNameRef.current = jsonData.title;
+      if (jsonFile && imageFiles.length === 3) {
+        // Process the files
+        const jsonText = await jsonFile.text();
+        const jsonData = JSON.parse(jsonText);
 
         const modifyJson = (newTitle: string): File => {
+          // Modify the JSON title
           jsonData.title = newTitle;
           jsonData.id = newTitle;
-          folderNameRef.current = newTitle;
           return new File([JSON.stringify(jsonData, null, 2)], jsonFile.name, {
             type: "application/json",
           });
         };
 
-        onSelect([jsonFile, ...pngFiles], folderNameRef.current, modifyJson);
+        onSelect([jsonFile, ...imageFiles], folderName, modifyJson);
       } else {
-        console.error("Please select one .json file and three image files.");
+        console.error(
+          "Please select one .json file and three image files (png, jpg, jpeg, gif, webp)."
+        );
       }
     },
     [onSelect]
@@ -51,7 +56,7 @@ export const useSelectFolderDialog = (
       <input
         type="file"
         multiple
-        accept=".json,.png,.jpg,.jpeg"
+        accept=".json,.png,.jpg,.gif,.jpeg,.webp,.svg"
         ref={ref}
         onChange={onChange}
         style={{ display: "none" }}
