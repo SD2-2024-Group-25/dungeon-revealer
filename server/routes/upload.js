@@ -5,12 +5,9 @@ const path = require("path");
 
 router.post("/scenario", (req, res) => {
   //API to upload scenario
-
-  //const { files, folderName } = req.body;
   const { files, parentFolder, folderName } = req.body;
   try {
     const basePath = path.resolve("./");
-    //const destinationPath = path.join(basePath, "data", "maps", folderName); //Defines the path
     const destinationPath = path.join(
       basePath,
       "data",

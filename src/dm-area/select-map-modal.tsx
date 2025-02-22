@@ -21,13 +21,28 @@ import { selectMapModal_ActiveMapQuery } from "./__generated__/selectMapModal_Ac
 
 import { useSelectFolderDialog } from "../hooks/use-select-folder-dialog"; // This is for "folder" selection, but just prompts 4 files (1 json, 3 png)
 import { ModalFooter } from "@chakra-ui/react";
-/*
-import React2, { useState, useEffect } from "react";
-import fs from "fs";
-import path from "path";
-*/
+
 const DEFAULT_MAPS_DIR = "../data/defaultmaps";
 const MAPS_DIR = "../data/maps";
+
+// deleteScenario function to call API and delete a selected map
+const deleteScenario = async (folderName: string): Promise<void> => {
+  try {
+    const response = await fetch(`/api/delete/destroy`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderName }),
+    });
+
+    if (response.ok) {
+      console.log(`Successfully deleted scenario: ${folderName}`);
+    } else {
+      console.error(`Error deleting scenario: ${folderName}`);
+    }
+  } catch (error) {
+    console.error("Failed to delete scenario:", error);
+  }
+};
 
 //uploadScenario function used with selectFolderDialog for uploading scenario to DR
 const uploadScenario = async (
@@ -60,7 +75,6 @@ const uploadScenario = async (
 type CreateNewMapButtonProps2 = {
   children: React.ReactChild;
   onUploadScenario: (files: File[], folderName: string) => void;
-  //onUploadScenario: (files: File[], parentFolder: string, folderName: string) => void;
 } & Pick<
   React.ComponentProps<typeof Button.Primary>,
   "tabIndex" | "fullWidth" | "big"
@@ -124,7 +138,7 @@ const CreateNewScenarioButton = ({
   );
 };
 
-//SelectDefaultButton for default scenario selection (WIP)
+//SelectDefaultButton for default scenario selection
 type CreateNewMapButtonProps3 = {
   children: React.ReactChild;
   setSelectedFolder: (folder: string) => void;
@@ -593,29 +607,10 @@ export const SelectMapModal = ({
                   </>
                 </CreateNewMapButton>
                 {/* This section makes button for new scenario */}
-                {/*}
-                <CreateNewScenarioButton
-                  tabIndex={1}
-                  fullWidth
-                  onSelectFiles={(files) => {
-                    
-                    const folderName = 'test';
-                    //folderName = await CreateNewScenarioModal();
-                    uploadScenario(files, folderName);
-                                    
-                  }}
-                >
-                  <>
-                    <Icon.Plus boxSize="20px"/> <span style={{ fontSize: "10px"}}>Create New Scenario</span>
-                  </>
-                </CreateNewScenarioButton> 
-                  */}
-
                 <CreateNewScenarioButton
                   tabIndex={1}
                   fullWidth
                   onUploadScenario={(files, folderName) => {
-                    //uploadScenario(files, folderName);
                     uploadScenario(files, "maps", folderName);
                   }}
                 >
@@ -885,7 +880,25 @@ export const SelectScenarioModal = ({
             </div>
 
             {/* Delete Button */}
-            <div style={{ flex: 1, maxWidth: "200px" }}></div>
+            {selectedScenario && (
+              <div
+                style={{ flex: 0.5, maxWidth: "200px", marginLeft: "-250px" }}
+              >
+                <Button.Tertiary
+                  tabIndex={1}
+                  onClick={() => {
+                    deleteScenario(selectedScenario);
+                    setScenarios((prev) =>
+                      prev.filter((scenario) => scenario !== selectedScenario)
+                    );
+                    setSelectedScenario(null);
+                  }}
+                >
+                  <Icon.Trash boxSize="20px" />
+                  <span style={{ fontSize: "10px" }}>Delete</span>
+                </Button.Tertiary>
+              </div>
+            )}
 
             {/* Load Scenario Button */}
             {selectedScenario && (

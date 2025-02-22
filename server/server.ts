@@ -28,6 +28,7 @@ import type {
 const uploadRoutes = require("./routes/upload"); //Defines the route for api upload
 const copyRoutes = require("./routes/copy"); //Defines the route for api copy
 const fetchdefaultRoutes = require("./routes/fetch"); //Defines the route for api fetchdefault
+const deleteRoutes = require("./routes/delete"); //Defines the route for api delete
 import archiver from "archiver";
 
 type RequestWithRole = Request & { role: string | null };
@@ -155,6 +156,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   apiRouter.use("/upload", uploadRoutes); //api call for upload
   apiRouter.use("/copy", copyRoutes); //api call for copy
   apiRouter.use("/fetch", fetchdefaultRoutes); //api call for fetchdefault
+  apiRouter.use("/delete", deleteRoutes); //api call for delete
 
   apiRouter.get("/active-map", requiresPcRole, (req, res) => {
     let activeMap = null;
