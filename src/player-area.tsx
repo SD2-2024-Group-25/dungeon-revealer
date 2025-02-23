@@ -12,7 +12,7 @@ import { buildApiUrl } from "./public-url";
 import { AuthenticatedAppShell } from "./authenticated-app-shell";
 import { useSocket } from "./socket";
 import { animated, useSpring, to } from "react-spring";
-import { MapView, MapControlInterface } from "./map-view";
+import { MapControlInterface } from "./map-view";
 import { useGesture } from "react-use-gesture";
 import { randomHash } from "./utilities/random-hash";
 import { useWindowDimensions } from "./hooks/use-window-dimensions";
@@ -31,6 +31,69 @@ import { playerArea_PlayerMap_ActiveMapQuery } from "./__generated__/playerArea_
 import { playerArea_MapPingMutation } from "./__generated__/playerArea_MapPingMutation.graphql";
 import { UpdateTokenContext } from "./update-token-context";
 import { LazyLoadedMapView } from "./lazy-loaded-map-view";
+
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+`;
+
+const ModalContent = styled.div`
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+`;
+
+type NoteEditorModalProps = {
+  onClose: () => void;
+};
+
+const NoteEditorModal: React.FC<NoteEditorModalProps> = ({ onClose }) => {
+  const user = userSession.getUser();
+  const noteStorageKey = `drSessionNotes_${user?.id}`;
+
+  const [noteContent, setNoteContent] = React.useState("");
+
+  // Load the player's existing notes when the modal opens.
+  React.useEffect(() => {
+    const savedNotes = localStorage.getItem(noteStorageKey);
+    if (savedNotes) {
+      setNoteContent(savedNotes);
+    }
+  }, [noteStorageKey]);
+
+  // Auto-save the notes when the modal is closed.
+  const handleClose = () => {
+    localStorage.setItem(noteStorageKey, noteContent);
+    onClose();
+  };
+
+  return (
+    <ModalOverlay>
+      <ModalContent>
+        <h2>{user?.name} Notes</h2>
+        <textarea
+          value={noteContent}
+          onChange={(e) => setNoteContent(e.target.value)}
+          style={{ width: "100%", height: "200px" }}
+          placeholder="Enter your notes here..."
+        />
+        <button onClick={handleClose} style={{ marginTop: "10px" }}>
+          Close
+        </button>
+      </ModalContent>
+    </ModalOverlay>
+  );
+};
 
 const ToolbarContainer = styled(animated.div)`
   position: absolute;
@@ -94,17 +157,12 @@ const PlayerMap = ({
   const controlRef = React.useRef<MapControlInterface | null>(null);
   const [markedAreas, setMarkedAreas] = React.useState<MarkedArea[]>(() => []);
 
-  // Save collaboration link to local storage
+  // Collaboration link management
   const saveCollaborationLink = (link: string) => {
     localStorage.setItem("collaborationLink", link);
   };
-
-  // Retrieve collaboration link from local storage
-  const getCollaborationLink = (): string | null => {
-    return localStorage.getItem("collaborationLink");
-  };
-
-  // Clear collaboration link from local storage
+  const getCollaborationLink = (): string | null =>
+    localStorage.getItem("collaborationLink");
   const clearCollaborationLink = () => {
     localStorage.removeItem("collaborationLink");
   };
@@ -128,10 +186,8 @@ const PlayerMap = ({
     const contextmenuListener = (ev: Event) => {
       ev.preventDefault();
     };
-    return () => {
-      window.addEventListener("contextmenu", contextmenuListener);
-      window.removeEventListener("contextmenu", contextmenuListener);
-    };
+    window.addEventListener("contextmenu", contextmenuListener);
+    return () => window.removeEventListener("contextmenu", contextmenuListener);
   }, []);
 
   React.useEffect(() => {
@@ -140,9 +196,7 @@ const PlayerMap = ({
         currentMap.retry();
       }
     };
-
     window.document.addEventListener("visibilitychange", listener, false);
-
     return () =>
       window.document.removeEventListener("visibilitychange", listener, false);
   }, []);
@@ -162,7 +216,7 @@ const PlayerMap = ({
         });
       }
     },
-    [currentMap, fetch]
+    [currentMap, fetch, socket.id]
   );
 
   const [toolbarPosition, setToolbarPosition] = useSpring(() => ({
@@ -170,15 +224,17 @@ const PlayerMap = ({
     snapped: true,
   }));
 
-  // excalidraw iframe
+  // State for the excalidraw iframe/modal
   const [isIframeOpen, setIsIframeOpen] = React.useState(false);
   const [iframeUrl, setIframeUrl] = React.useState<string | null>(null);
 
+  // State for the Note Editor Modal
+  const [isNoteModalOpen, setIsNoteModalOpen] = React.useState(false);
+
   const [showItems, setShowItems] = React.useState(true);
-
   const isDraggingRef = React.useRef(false);
-
   const windowDimensions = useWindowDimensions();
+
   React.useEffect(() => {
     const position = toolbarPosition.position.get();
     const snapped = toolbarPosition.snapped.get();
@@ -189,7 +245,7 @@ const PlayerMap = ({
         snapped: true,
       });
     }
-  }, [windowDimensions]);
+  }, [windowDimensions, toolbarPosition, setToolbarPosition]);
 
   const handler = useGesture(
     {
@@ -205,7 +261,7 @@ const PlayerMap = ({
           isDraggingRef.current = false;
           return;
         }
-        setShowItems((showItems) => !showItems);
+        setShowItems((prev) => !prev);
       },
     },
     {
@@ -221,16 +277,12 @@ const PlayerMap = ({
       },
     }
   );
+
   const noteWindowActions = useNoteWindowActions();
+
   return (
     <>
-      <div
-        style={{
-          cursor: "grab",
-          background: "black",
-          height: "100vh",
-        }}
-      >
+      <div style={{ cursor: "grab", background: "black", height: "100vh" }}>
         <FlatContextProvider
           value={[
             [
@@ -297,13 +349,11 @@ const PlayerMap = ({
               <Toolbar horizontal>
                 <Toolbar.Logo {...handler()} cursor="grab" />
                 {showItems ? (
-                  <React.Fragment>
+                  <>
                     <Toolbar.Group>
                       <Toolbar.Item isActive>
                         <Toolbar.Button
-                          onClick={() => {
-                            controlRef.current?.controls.center();
-                          }}
+                          onClick={() => controlRef.current?.controls.center()}
                           onTouchStart={(ev) => {
                             ev.preventDefault();
                             controlRef.current?.controls.center();
@@ -315,14 +365,11 @@ const PlayerMap = ({
                       </Toolbar.Item>
                       <Toolbar.Item isActive>
                         <Toolbar.LongPressButton
-                          onClick={() => {
-                            controlRef.current?.controls.zoomIn();
-                          }}
+                          onClick={() => controlRef.current?.controls.zoomIn()}
                           onLongPress={() => {
                             const interval = setInterval(() => {
                               controlRef.current?.controls.zoomIn();
                             }, 100);
-
                             return () => clearInterval(interval);
                           }}
                         >
@@ -332,14 +379,11 @@ const PlayerMap = ({
                       </Toolbar.Item>
                       <Toolbar.Item isActive>
                         <Toolbar.LongPressButton
-                          onClick={() => {
-                            controlRef.current?.controls.zoomOut();
-                          }}
+                          onClick={() => controlRef.current?.controls.zoomOut()}
                           onLongPress={() => {
                             const interval = setInterval(() => {
                               controlRef.current?.controls.zoomOut();
                             }, 100);
-
                             return () => clearInterval(interval);
                           }}
                         >
@@ -350,11 +394,7 @@ const PlayerMap = ({
                       <Toolbar.Item isActive>
                         <Toolbar.LongPressButton
                           onClick={() => {
-                            noteWindowActions.showNoteInWindow(
-                              null,
-                              "note-editor",
-                              true
-                            );
+                            setIsNoteModalOpen(true);
                           }}
                         >
                           <Icon.BookOpen boxSize="20px" />
@@ -369,23 +409,16 @@ const PlayerMap = ({
                               if (!user) {
                                 throw new Error("User data not available");
                               }
-
                               const excalidrawUrl = import.meta.env
                                 .VITE_EXCALIDRAW_URL;
                               const url = new URL(excalidrawUrl);
-
-                              // Add username/userID as query params
                               url.searchParams.append("username", user.name);
                               url.searchParams.append("userID", user.id);
-
-                              // Add collaboration room from hash
                               const savedCollabLink = getCollaborationLink();
                               if (savedCollabLink) {
                                 const collabUrl = new URL(savedCollabLink);
-                                // Copy hash fragment from saved collaboration link
                                 url.hash = collabUrl.hash;
                               }
-
                               setIframeUrl(url.toString());
                               setIsIframeOpen(true);
                             } catch (error) {
@@ -398,7 +431,7 @@ const PlayerMap = ({
                         </Toolbar.Button>
                       </Toolbar.Item>
                     </Toolbar.Group>
-                  </React.Fragment>
+                  </>
                 ) : null}
               </Toolbar>
             </ToolbarContainer>
@@ -419,11 +452,11 @@ const PlayerMap = ({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)", // Semi-transparent background
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 1000, // Ensure it's on top of other elements
+            zIndex: 1000,
           }}
         >
           <div
@@ -438,7 +471,7 @@ const PlayerMap = ({
             }}
           >
             <button
-              onClick={() => setIsIframeOpen(false)} // Close the iframe/modal
+              onClick={() => setIsIframeOpen(false)}
               style={{ alignSelf: "flex-end", marginBottom: "10px" }}
             >
               Close
@@ -450,6 +483,11 @@ const PlayerMap = ({
             />
           </div>
         </div>
+      )}
+
+      {/* Render the Note Editor Modal when active */}
+      {isNoteModalOpen && (
+        <NoteEditorModal onClose={() => setIsNoteModalOpen(false)} />
       )}
     </>
   );
