@@ -48,12 +48,16 @@ function linkifyRoomUrls(rawText: string) {
 
 function convertRoomHashToLink(rawText: string): string {
   return rawText.replace(
-    /(#room=[^\s]+)/g, // <--- removed (^|\s)
-    (fullMatch) => {
-      const roomRef = fullMatch; // e.g. "#room=abcdef"
-      const link = `http://localhost:5000/${roomRef}`;
-      // or do "[http://localhost:5000/#room=abc](http://localhost:5000/#room=abc)"
-      return `[${roomRef}](${link})`;
+    /((https?:\/\/[^\s#]+)?#room=[^\s]+)/g, // Match both #room=... and full URLs
+    (_fullMatch, fullUrl) => {
+      let roomRef = fullUrl; // Preserve the full match
+
+      // If it's just a fragment, prepend the base URL
+      if (!roomRef.startsWith("https://")) {
+        roomRef = `http://dr-excalidraw-production.up.railway.app/${roomRef}`;
+      }
+
+      return `[${fullUrl}](${roomRef})`;
     }
   );
 }
