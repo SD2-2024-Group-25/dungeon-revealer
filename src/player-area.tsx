@@ -112,7 +112,7 @@ const NoteEditorModal: React.FC<NoteEditorModalProps> = ({ onClose }) => {
           placeholder="Enter your notes here..."
         />
         <button onClick={handleClose} style={{ marginTop: "10px" }}>
-          Close
+          Save
         </button>
       </ModalContent>
     </ModalOverlay>
