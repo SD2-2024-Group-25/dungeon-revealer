@@ -53,6 +53,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   const maps = new Maps({ processTask, dataDirectory: env.DATA_DIRECTORY });
   const settings = new Settings({ dataDirectory: env.DATA_DIRECTORY });
   const researchPath = path.join(__dirname, "..", "public", "research");
+  const notes_folder = path.join(researchPath, "notes");
   const fileStorage = new FileStorage({
     dataDirectory: env.DATA_DIRECTORY,
     db,
@@ -256,6 +257,58 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     });
   });
 
+  app.post("/api/save-notes", async (req, res) => {
+    const { userId, userName, content } = req.body;
+
+    if (!userId || !userName || !content) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    try {
+      const filePath = path.join(notes_folder, `${userId}_notes.txt`);
+
+      // Ensure the folder exists
+      await fs.ensureDir(notes_folder);
+
+      // Ensure the file exists before writing
+      await fs.ensureFile(filePath);
+
+      const formattedContent = `User: ${userName}\n\n${content}`;
+
+      // Write notes to file
+      await fs.writeFile(filePath, formattedContent, "utf8");
+      console.log(`Notes saved: ${filePath}`);
+
+      res.json({ success: true, message: "Notes saved successfully" });
+    } catch (error) {
+      console.error("Error saving notes:", error);
+      res.status(500).json({ error: "Failed to save notes" });
+    }
+  });
+
+  // **API to Retrieve Notes**
+  app.get("/api/get-notes/:userId", async (req, res) => {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+
+    try {
+      const filePath = path.join(notes_folder, `${userId}_notes.txt`);
+
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "Notes not found" });
+      }
+
+      const content = await fs.readFile(filePath, "utf8");
+      res.json({ success: true, content });
+    } catch (error) {
+      console.error("Error reading notes:", error);
+      res.status(500).json({ error: "Failed to fetch notes" });
+    }
+  });
+
   apiRouter.get("/download-folder/:folderName", requiresDmRole, (req, res) => {
     const { folderName } = req.params;
     const folderPath = path.join(researchPath, "saved", folderName);
@@ -283,36 +336,57 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   apiRouter.post("/save-session/:folderName", (req, res) => {
     const name = req.params.folderName;
     console.log(name);
+
     if (!name || name.trim() === "") {
       return res.status(400).json({ error: "Session name is required" });
     }
 
     const sanitizedFolderName = name.replace(/[^a-zA-Z0-9-_]/g, "_"); // Sanitize name
     console.log("here", sanitizedFolderName);
-    const sourceFolder = path.join(researchPath, "downloads", "session"); // Original session folder
+
+    const sourceSessionFolder = path.join(researchPath, "downloads", "session"); // Original session folder
+    const sourceNotesFolder = path.join(researchPath, "notes"); // Notes folder
+
     const destinationFolder = path.join(
       researchPath,
       "saved",
       sanitizedFolderName
-    ); // Target saved folder
+    ); // Target saved session folder
+    const destinationNotesFolder = path.join(destinationFolder, "notes"); // Target notes folder inside saved session
 
     try {
-      if (!fs.existsSync(sourceFolder)) {
+      // Ensure source session folder exists
+      if (!fs.existsSync(sourceSessionFolder)) {
         return res.status(404).json({ error: "Session folder not found" });
       }
 
+      // Ensure saved sessions folder exists
       if (!fs.existsSync(path.join(researchPath, "saved"))) {
         fs.mkdirSync(path.join(researchPath, "saved"), { recursive: true });
       }
 
-      copyFolderRecursive(sourceFolder, destinationFolder);
-      deleteFolderContents(sourceFolder);
+      // Copy session folder
+      copyFolderRecursive(sourceSessionFolder, destinationFolder);
+
+      // Copy notes folder
+      if (fs.existsSync(sourceNotesFolder)) {
+        copyFolderRecursive(sourceNotesFolder, destinationNotesFolder);
+      } else {
+        console.warn("Notes folder does not exist, skipping copy.");
+      }
+
+      // Clean up session folder after copying
+      deleteFolderContents(sourceSessionFolder);
+      deleteFolderContents(sourceNotesFolder);
 
       console.log(`Session saved: ${sanitizedFolderName}`);
       res
         .status(200)
         .json({ message: `Session saved as "${sanitizedFolderName}"` });
-    } catch (error) {}
+    } catch (error) {
+      console.error("Error saving session:", error);
+      res.status(500).json({ error: "Failed to save session" });
+    }
   });
 
   function copyFolderRecursive(source: any, target: any) {

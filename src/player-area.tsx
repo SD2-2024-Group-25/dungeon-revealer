@@ -66,14 +66,38 @@ const NoteEditorModal: React.FC<NoteEditorModalProps> = ({ onClose }) => {
   // Load the player's existing notes when the modal opens.
   React.useEffect(() => {
     const savedNotes = localStorage.getItem(noteStorageKey);
+    console.log("Loaded saved notes:", savedNotes);
     if (savedNotes) {
       setNoteContent(savedNotes);
     }
   }, [noteStorageKey]);
 
+  const saveNotesToAPI = async () => {
+    try {
+      const response = await fetch("/api/save-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user?.id,
+          userName: user?.name,
+          content: noteContent,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error("Failed to save notes.");
+      } else {
+        console.log("Notes saved successfully.");
+      }
+    } catch (error) {
+      console.error("Error saving notes:", error);
+    }
+  };
+
   // Auto-save the notes when the modal is closed.
-  const handleClose = () => {
+  const handleClose = async () => {
     localStorage.setItem(noteStorageKey, noteContent);
+    await saveNotesToAPI(); // Ensure notes are saved before closing
     onClose();
   };
 

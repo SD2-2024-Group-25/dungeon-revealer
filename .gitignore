@@ -29,6 +29,7 @@ data/settings.json
 # Research Data Download/Upload #
 public/research/downloads
 public/research/saved
+public/research/notes
 
 # Packages #
 ############
