@@ -19,6 +19,144 @@ import { useInvokeOnScrollEnd } from "../hooks/use-invoke-on-scroll-end";
 import { selectMapModal_ActiveMap_MapFragment$key } from "./__generated__/selectMapModal_ActiveMap_MapFragment.graphql";
 import { selectMapModal_ActiveMapQuery } from "./__generated__/selectMapModal_ActiveMapQuery.graphql";
 
+import { useSelectFolderDialog } from "../hooks/use-select-folder-dialog"; // This is for "folder" selection, but just prompts 4 files (1 json, 3 png)
+import { ModalFooter } from "@chakra-ui/react";
+/*
+import React2, { useState, useEffect } from "react";
+import fs from "fs";
+import path from "path";
+*/
+const DEFAULT_MAPS_DIR = "../data/defaultmaps";
+const MAPS_DIR = "../data/maps";
+
+//uploadScenario function used with selectFolderDialog for uploading scenario to DR
+const uploadScenario = async (
+  files: File[],
+  parentFolder: string,
+  folderName: string
+): Promise<void> => {
+  const formattedFiles = await Promise.all(
+    files.map(async (file) => ({
+      name: file.name,
+      buffer: Array.from(new Uint8Array(await file.arrayBuffer())),
+    }))
+  );
+
+  const response = await fetch("/api/upload/scenario", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    //body: JSON.stringify({ files: formattedFiles, folderName }),
+    body: JSON.stringify({ files: formattedFiles, parentFolder, folderName }),
+  });
+
+  if (response.ok) {
+    console.log("Successfully uploaded scenario.");
+  } else {
+    console.error("Error uploading scenario.");
+  }
+};
+
+//CreateNewScenarioButton for naming the scenario folder, this works with useSelectFolderDialog for multiple file selection
+type CreateNewMapButtonProps2 = {
+  children: React.ReactChild;
+  onUploadScenario: (files: File[], folderName: string) => void;
+  //onUploadScenario: (files: File[], parentFolder: string, folderName: string) => void;
+} & Pick<
+  React.ComponentProps<typeof Button.Primary>,
+  "tabIndex" | "fullWidth" | "big"
+>;
+const CreateNewScenarioButton = ({
+  onUploadScenario,
+  children,
+  ...props
+}: CreateNewMapButtonProps2) => {
+  const [reactTreeNode, showFilesDialog] = useSelectFolderDialog(
+    (
+      files: File[],
+      folderName: string,
+      modifyJson: (title: string) => File
+    ) => {
+      setSelectedFiles(files);
+      setFolderName(folderName);
+      setModifyJsonFunc(() => modifyJson);
+      openModal();
+    }
+  );
+
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [selectedFiles, setSelectedFiles] = React.useState<File[] | null>(null);
+  const [folderName, setFolderName] = React.useState<string | null>(null);
+  const [modifyJsonFunc, setModifyJsonFunc] = React.useState<
+    ((title: string) => File) | null
+  >(null);
+
+  const openModal = () => setIsModalOpen(true);
+  const closeModal = () => setIsModalOpen(false);
+  const handleModalSubmit = (newTitle: string) => {
+    if (selectedFiles && modifyJsonFunc) {
+      const updatedJsonFile = modifyJsonFunc(newTitle);
+      setFolderName(newTitle);
+
+      onUploadScenario(
+        [
+          updatedJsonFile,
+          ...selectedFiles.filter((file) => !file.name.endsWith(".json")),
+        ],
+        newTitle
+      );
+    }
+    closeModal();
+  };
+
+  return (
+    <>
+      <Button.Primary {...props} onClick={showFilesDialog}>
+        {children}
+      </Button.Primary>
+      {reactTreeNode}
+      {isModalOpen && (
+        <CreateNewScenarioModal
+          closeModal={closeModal}
+          onSubmit={handleModalSubmit}
+        />
+      )}
+    </>
+  );
+};
+
+//SelectDefaultButton for default scenario selection (WIP)
+type CreateNewMapButtonProps3 = {
+  children: React.ReactChild;
+  setSelectedFolder: (folder: string) => void;
+} & Pick<
+  React.ComponentProps<typeof Button.Primary>,
+  "tabIndex" | "fullWidth" | "big"
+>;
+
+const SelectDefaultButton = ({
+  setSelectedFolder,
+  children,
+  ...props
+}: CreateNewMapButtonProps3) => {
+  const [isModalOpen, setModalOpen] = React.useState(false);
+
+  const handleFolderLoad = (folder: string) => {
+    setSelectedFolder(folder); // Handle folder selection
+    setModalOpen(false); // Close the modal after selection
+  };
+
+  return (
+    <>
+      <Button.Primary {...props} onClick={() => setModalOpen(true)}>
+        {children}
+      </Button.Primary>
+      {isModalOpen && (
+        <SelectScenarioModal closeModal={() => setModalOpen(false)} />
+      )}
+    </>
+  );
+};
+
 type CreateNewMapButtonProps = {
   children: React.ReactChild;
   onSelectFile: (file: File) => void;
@@ -375,6 +513,24 @@ export const SelectMapModal = ({
             <Modal.Heading2>
               <Icon.Map boxSize="28px" /> Map Library
             </Modal.Heading2>
+            {/* Default folder button */}
+            <div style={{ marginLeft: "100px" }}>
+              <SelectDefaultButton
+                tabIndex={1}
+                fullWidth
+                setSelectedFolder={(folder) => {
+                  console.log("Selected Folder:", folder);
+                }}
+              >
+                <>
+                  <Icon.Plus boxSize="20px" />
+                  <span style={{ fontSize: "10px" }}>
+                    Default Scenario Folder
+                  </span>
+                </>
+              </SelectDefaultButton>
+            </div>
+            {/* Default folder button */}
             <div style={{ flex: 1, textAlign: "right" }}>
               {canClose ? (
                 <Button.Tertiary
@@ -432,9 +588,46 @@ export const SelectMapModal = ({
                   }}
                 >
                   <>
-                    <Icon.Plus boxSize="20px" /> <span>Create New Map</span>
+                    <Icon.Plus boxSize="20px" />{" "}
+                    <span style={{ fontSize: "10px" }}>Create New Map</span>
                   </>
                 </CreateNewMapButton>
+                {/* This section makes button for new scenario */}
+                {/*}
+                <CreateNewScenarioButton
+                  tabIndex={1}
+                  fullWidth
+                  onSelectFiles={(files) => {
+                    
+                    const folderName = 'test';
+                    //folderName = await CreateNewScenarioModal();
+                    uploadScenario(files, folderName);
+                                    
+                  }}
+                >
+                  <>
+                    <Icon.Plus boxSize="20px"/> <span style={{ fontSize: "10px"}}>Create New Scenario</span>
+                  </>
+                </CreateNewScenarioButton> 
+                  */}
+
+                <CreateNewScenarioButton
+                  tabIndex={1}
+                  fullWidth
+                  onUploadScenario={(files, folderName) => {
+                    //uploadScenario(files, folderName);
+                    uploadScenario(files, "maps", folderName);
+                  }}
+                >
+                  <>
+                    <Icon.Plus boxSize="20px" />{" "}
+                    <span style={{ fontSize: "10px" }}>
+                      Create New Scenario
+                    </span>
+                  </>
+                </CreateNewScenarioButton>
+
+                {/* This section makes button for new scenario */}
               </Modal.Footer>
             </Modal.Aside>
             {activeMapResponse.data?.map ? (
@@ -575,6 +768,154 @@ export const SelectMapModal = ({
   );
 };
 
+//This is modal for default folder (just a tweaked select-map-modal)
+export const SelectScenarioModal = ({
+  closeModal,
+}: {
+  closeModal: () => void;
+}): React.ReactElement => {
+  const [scenarios, setScenarios] = React.useState<string[]>([]);
+  const [selectedScenario, setSelectedScenario] = React.useState<string | null>(
+    null
+  );
+  const [showNamingModal, setShowNamingModal] = React.useState(false);
+
+  //Fetch scenarios from the "defaultmaps" directory (used for list)
+  React.useEffect(() => {
+    fetch("/api/fetch/maps")
+      .then((res) => res.json())
+      .then((data) => setScenarios(data))
+      .catch((err) => console.error("Error fetching scenarios:", err));
+  }, []);
+
+  //Function to put copied scenario in maps folder
+  const onCreateScenario = (sourceFolder: string, newScenarioName: string) => {
+    fetch("/api/copy/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sourceFolder, newScenarioName }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("Scenario created:", data);
+        closeModal();
+      })
+      .catch((err) => console.error("Error creating scenario:", err));
+  };
+
+  return (
+    <>
+      <Modal onClickOutside={closeModal} onPressEscape={closeModal}>
+        <Modal.Dialog>
+          <Modal.Header>
+            <Modal.Heading2>
+              <Icon.Map boxSize="28px" /> Select Default Scenario
+            </Modal.Heading2>
+            <div style={{ flex: 1, textAlign: "right" }}>
+              <Button.Tertiary
+                tabIndex={1}
+                style={{ marginLeft: 8 }}
+                onClick={closeModal}
+              >
+                Close
+              </Button.Tertiary>
+            </div>
+          </Modal.Header>
+          <Modal.Body style={{ display: "flex", height: "60vh" }} noPadding>
+            <Modal.Aside>
+              {scenarios.length > 0 ? (
+                <ul style={{ listStyle: "none", padding: 0 }}>
+                  {scenarios.map((scenario) => (
+                    <li
+                      key={scenario}
+                      style={{
+                        padding: "10px",
+                        cursor: "pointer",
+                        backgroundColor:
+                          selectedScenario === scenario
+                            ? "#ccc"
+                            : "transparent",
+                        transition: "background-color 0.2s",
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.backgroundColor = "#ddd")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          selectedScenario === scenario
+                            ? "#ccc"
+                            : "transparent")
+                      }
+                      onClick={() => setSelectedScenario(scenario)}
+                    >
+                      <Icon.Map boxSize="20px" /> {scenario}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No scenarios found.</p>
+              )}
+            </Modal.Aside>
+          </Modal.Body>
+
+          <Modal.Footer
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "200px",
+            }}
+          >
+            {/* Add New Default Scenario Button */}
+            <div style={{ flex: 1, maxWidth: "200px" }}>
+              <CreateNewScenarioButton
+                tabIndex={1}
+                fullWidth
+                onUploadScenario={(files, folderName) => {
+                  uploadScenario(files, "defaultmaps", folderName);
+                }}
+              >
+                <>
+                  <Icon.Plus boxSize="20px" />
+                  <span style={{ fontSize: "10px" }}>
+                    Add New Default Scenario
+                  </span>
+                </>
+              </CreateNewScenarioButton>
+            </div>
+
+            {/* Delete Button */}
+            <div style={{ flex: 1, maxWidth: "200px" }}></div>
+
+            {/* Load Scenario Button */}
+            {selectedScenario && (
+              <div style={{ flex: 0.5, maxWidth: "150px" }}>
+                <Button.Primary
+                  tabIndex={1}
+                  onClick={() => setShowNamingModal(true)}
+                >
+                  Load Scenario
+                </Button.Primary>
+              </div>
+            )}
+          </Modal.Footer>
+        </Modal.Dialog>
+      </Modal>
+
+      {/* Show the naming modal when Load Scenario is clicked */}
+      {showNamingModal && selectedScenario && (
+        <CreateNewScenarioModal
+          closeModal={() => setShowNamingModal(false)}
+          onSubmit={(newScenarioName) => {
+            onCreateScenario(selectedScenario, newScenarioName);
+            setShowNamingModal(false);
+          }}
+        />
+      )}
+    </>
+  );
+};
+
 const extractDefaultTitleFromFileName = (fileName: string) => {
   const parts = fileName.split(".");
   if (parts.length < 2) return fileName;
@@ -640,6 +981,71 @@ const CreateNewMapModal = ({
                   }}
                 >
                   Create Map
+                </Button.Primary>
+              </div>
+            </Modal.ActionGroup>
+          </Modal.Actions>
+        </Modal.Footer>
+      </Modal.Dialog>
+    </Modal>
+  );
+};
+
+//Modal used for entering scenario name
+const CreateNewScenarioModal = ({
+  closeModal,
+  onSubmit,
+}: {
+  closeModal: () => void;
+  onSubmit: (folderName: string) => void;
+}): React.ReactElement => {
+  const [inputValue, setInputValue] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+
+  const onChangeInputValue = React.useCallback(
+    (ev) => {
+      setInputValue(ev.target.value);
+      setError(null);
+    },
+    [setInputValue, setError]
+  );
+
+  return (
+    <Modal onClickOutside={closeModal} onPressEscape={closeModal}>
+      <Modal.Dialog size={ModalDialogSize.SMALL}>
+        <Modal.Header>
+          <Modal.Heading3>Create New Scenario</Modal.Heading3>
+        </Modal.Header>
+        <Modal.Body>
+          <InputGroup
+            autoFocus
+            placeholder="Enter scenario name"
+            value={inputValue}
+            onChange={onChangeInputValue}
+            error={error}
+          />
+        </Modal.Body>
+        <Modal.Footer>
+          <Modal.Actions>
+            <Modal.ActionGroup>
+              <div>
+                <Button.Tertiary onClick={closeModal} type="button">
+                  Cancel
+                </Button.Tertiary>
+              </div>
+              <div>
+                <Button.Primary
+                  type="submit"
+                  onClick={() => {
+                    if (inputValue.trim().length === 0) {
+                      setError("Please enter a scenario name.");
+                      return;
+                    }
+                    onSubmit(inputValue);
+                    closeModal();
+                  }}
+                >
+                  Create
                 </Button.Primary>
               </div>
             </Modal.ActionGroup>

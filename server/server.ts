@@ -25,6 +25,11 @@ import type {
   Request,
 } from "express-serve-static-core";
 
+const uploadRoutes = require("./routes/upload"); //Defines the route for api upload
+const copyRoutes = require("./routes/copy"); //Defines the route for api copy
+const fetchdefaultRoutes = require("./routes/fetch"); //Defines the route for api fetchdefault
+import archiver from "archiver";
+
 type RequestWithRole = Request & { role: string | null };
 type ErrorWithStatus = Error & { status: number };
 
@@ -47,6 +52,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
   const maps = new Maps({ processTask, dataDirectory: env.DATA_DIRECTORY });
   const settings = new Settings({ dataDirectory: env.DATA_DIRECTORY });
+  const researchPath = path.join(__dirname, "..", "public", "research");
+  const notes_folder = path.join(researchPath, "notes");
   const fileStorage = new FileStorage({
     dataDirectory: env.DATA_DIRECTORY,
     db,
@@ -146,6 +153,10 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     });
   });
 
+  apiRouter.use("/upload", uploadRoutes); //api call for upload
+  apiRouter.use("/copy", copyRoutes); //api call for copy
+  apiRouter.use("/fetch", fetchdefaultRoutes); //api call for fetchdefault
+
   apiRouter.get("/active-map", requiresPcRole, (req, res) => {
     let activeMap = null;
     const activeMapId = settings.get("currentMapId");
@@ -183,6 +194,232 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       },
     });
   });
+
+  apiRouter.get("/list-sessions", async (req, res) => {
+    const savedFolderPath = path.join(researchPath, "saved"); // Adjust this path as needed
+
+    try {
+      // Check if the saved folder exists
+      if (!fs.existsSync(savedFolderPath)) {
+        return res.status(404).json({ error: "Saved folder not found" });
+      }
+
+      // List all directories (session folders) in the saved folder
+      const files = await fs.readdir(savedFolderPath);
+      const sessionFolders = files.filter((file) =>
+        fs.statSync(path.join(savedFolderPath, file)).isDirectory()
+      );
+
+      if (sessionFolders.length === 0) {
+        return res.status(404).json({ error: "No sessions found" });
+      }
+
+      // Return the list of session folder names
+      res.json({ sessions: sessionFolders });
+    } catch (err) {
+      console.error("Error reading saved folder:", err);
+      return res.status(500).json({ error: "Failed to list sessions" });
+    }
+  });
+
+  app.post("/api/recording", (req, res) => {
+    console.log("Recording API route hit"); // Check if the route is being triggered
+    const filePath = path.join(researchPath, "settings.json");
+    console.log("File path to write:", filePath); // Debug the file path
+
+    fs.readFile(filePath, "utf8", (err, data) => {
+      if (err) {
+        console.error("Error reading file:", err);
+        return res.status(500).json({ message: "Error reading file" });
+      }
+
+      let jsonData;
+      try {
+        jsonData = JSON.parse(data); // Parse the JSON content
+      } catch (e) {
+        console.error("Error parsing JSON:", e);
+        return res.status(500).json({ message: "Error parsing JSON" });
+      }
+
+      const updatedState =
+        jsonData.recording === "recording" ? "stopped" : "recording";
+      jsonData.recording = updatedState;
+      console.log("Updated recording state:", updatedState); // Check updated state
+
+      fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), (err) => {
+        if (err) {
+          console.error("Error writing file:", err);
+          return res.status(500).json({ message: "Error updating file" });
+        }
+        console.log("File written successfully"); // Confirm file was written
+        res.json({ recording: updatedState });
+      });
+    });
+  });
+
+  app.post("/api/save-notes", async (req, res) => {
+    const { userId, userName, content } = req.body;
+
+    if (!userId || !userName || !content) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    try {
+      const filePath = path.join(notes_folder, `${userId}_notes.txt`);
+
+      // Ensure the folder exists
+      await fs.ensureDir(notes_folder);
+
+      // Ensure the file exists before writing
+      await fs.ensureFile(filePath);
+
+      const formattedContent = `User: ${userName}\n\n${content}`;
+
+      // Write notes to file
+      await fs.writeFile(filePath, formattedContent, "utf8");
+      console.log(`Notes saved: ${filePath}`);
+
+      res.json({ success: true, message: "Notes saved successfully" });
+    } catch (error) {
+      console.error("Error saving notes:", error);
+      res.status(500).json({ error: "Failed to save notes" });
+    }
+  });
+
+  // **API to Retrieve Notes**
+  app.get("/api/get-notes/:userId", async (req, res) => {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+
+    try {
+      const filePath = path.join(notes_folder, `${userId}_notes.txt`);
+
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "Notes not found" });
+      }
+
+      const content = await fs.readFile(filePath, "utf8");
+      res.json({ success: true, content });
+    } catch (error) {
+      console.error("Error reading notes:", error);
+      res.status(500).json({ error: "Failed to fetch notes" });
+    }
+  });
+
+  apiRouter.get("/download-folder/:folderName", requiresDmRole, (req, res) => {
+    const { folderName } = req.params;
+    const folderPath = path.join(researchPath, "saved", folderName);
+
+    if (!fs.existsSync(folderPath)) {
+      return res.status(404).json({ error: { message: "Folder not found" } });
+    }
+
+    const zipFileName = `${folderName}.zip`;
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename=${zipFileName}`);
+
+    const archive = archiver("zip", { zlib: { level: 9 } });
+
+    archive.on("error", (err) => {
+      console.error("Error creating zip:", err);
+      res.status(500).json({ error: { message: "Error creating ZIP file" } });
+    });
+
+    archive.pipe(res);
+    archive.directory(folderPath, false);
+    archive.finalize();
+  });
+
+  apiRouter.post("/save-session/:folderName", (req, res) => {
+    const name = req.params.folderName;
+    console.log(name);
+
+    if (!name || name.trim() === "") {
+      return res.status(400).json({ error: "Session name is required" });
+    }
+
+    const sanitizedFolderName = name.replace(/[^a-zA-Z0-9-_]/g, "_"); // Sanitize name
+    console.log("here", sanitizedFolderName);
+
+    const sourceSessionFolder = path.join(researchPath, "downloads", "session"); // Original session folder
+    const sourceNotesFolder = path.join(researchPath, "notes"); // Notes folder
+
+    const destinationFolder = path.join(
+      researchPath,
+      "saved",
+      sanitizedFolderName
+    ); // Target saved session folder
+    const destinationNotesFolder = path.join(destinationFolder, "notes"); // Target notes folder inside saved session
+
+    try {
+      // Ensure source session folder exists
+      if (!fs.existsSync(sourceSessionFolder)) {
+        return res.status(404).json({ error: "Session folder not found" });
+      }
+
+      // Ensure saved sessions folder exists
+      if (!fs.existsSync(path.join(researchPath, "saved"))) {
+        fs.mkdirSync(path.join(researchPath, "saved"), { recursive: true });
+      }
+
+      // Copy session folder
+      copyFolderRecursive(sourceSessionFolder, destinationFolder);
+
+      // Copy notes folder
+      if (fs.existsSync(sourceNotesFolder)) {
+        copyFolderRecursive(sourceNotesFolder, destinationNotesFolder);
+      } else {
+        console.warn("Notes folder does not exist, skipping copy.");
+      }
+
+      // Clean up session folder after copying
+      deleteFolderContents(sourceSessionFolder);
+      deleteFolderContents(sourceNotesFolder);
+
+      console.log(`Session saved: ${sanitizedFolderName}`);
+      res
+        .status(200)
+        .json({ message: `Session saved as "${sanitizedFolderName}"` });
+    } catch (error) {
+      console.error("Error saving session:", error);
+      res.status(500).json({ error: "Failed to save session" });
+    }
+  });
+
+  function copyFolderRecursive(source: any, target: any) {
+    if (!fs.existsSync(target)) {
+      fs.mkdirSync(target, { recursive: true });
+    }
+
+    fs.readdirSync(source, { withFileTypes: true }).forEach((entry) => {
+      const srcPath = path.join(source, entry.name);
+      const destPath = path.join(target, entry.name);
+
+      if (entry.isDirectory()) {
+        // Recursively copy subfolders
+        copyFolderRecursive(srcPath, destPath);
+      } else {
+        // Copy individual files
+        fs.copyFileSync(srcPath, destPath);
+      }
+    });
+  }
+
+  function deleteFolderContents(folderPath: any) {
+    if (fs.existsSync(folderPath)) {
+      fs.readdirSync(folderPath).forEach((file) => {
+        const curPath = path.join(folderPath, file);
+        if (fs.lstatSync(curPath).isDirectory()) {
+          fs.rmSync(curPath, { recursive: true, force: true }); // Deletes subdirectories
+        } else {
+          fs.unlinkSync(curPath); // Deletes files
+        }
+      });
+    }
+  }
 
   const { router: mapsRouter } = createMapRouter({
     roleMiddleware,
