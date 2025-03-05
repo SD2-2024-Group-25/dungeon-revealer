@@ -342,17 +342,29 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
 
     const sanitizedFolderName = name.replace(/[^a-zA-Z0-9-_]/g, "_"); // Sanitize name
-    console.log("here", sanitizedFolderName);
+    const currentDate = new Date().toISOString().split("T")[0];
 
-    const sourceSessionFolder = path.join(researchPath, "downloads", "session"); // Original session folder
-    const sourceNotesFolder = path.join(researchPath, "notes"); // Notes folder
+    let finalFolderName = `${sanitizedFolderName}_${currentDate}`;
+    const savedPath = path.join(researchPath, "saved");
 
-    const destinationFolder = path.join(
-      researchPath,
-      "saved",
-      sanitizedFolderName
-    ); // Target saved session folder
-    const destinationNotesFolder = path.join(destinationFolder, "notes"); // Target notes folder inside saved session
+    // Function to find a unique folder name by appending _1, _2, etc.
+    function getUniqueFolderName(baseName: string) {
+      let counter = 1;
+      let uniqueName = baseName;
+
+      while (fs.existsSync(path.join(savedPath, uniqueName))) {
+        uniqueName = `${sanitizedFolderName}_${counter}_${currentDate}`;
+        counter++;
+      }
+      return uniqueName;
+    }
+
+    finalFolderName = getUniqueFolderName(finalFolderName);
+
+    const destinationFolder = path.join(savedPath, finalFolderName);
+    const sourceSessionFolder = path.join(researchPath, "downloads", "session");
+    const sourceNotesFolder = path.join(researchPath, "notes");
+    const destinationNotesFolder = path.join(destinationFolder, "notes");
 
     try {
       // Ensure source session folder exists
@@ -361,8 +373,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       }
 
       // Ensure saved sessions folder exists
-      if (!fs.existsSync(path.join(researchPath, "saved"))) {
-        fs.mkdirSync(path.join(researchPath, "saved"), { recursive: true });
+      if (!fs.existsSync(savedPath)) {
+        fs.mkdirSync(savedPath, { recursive: true });
       }
 
       // Copy session folder
@@ -379,10 +391,10 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       deleteFolderContents(sourceSessionFolder);
       deleteFolderContents(sourceNotesFolder);
 
-      console.log(`Session saved: ${sanitizedFolderName}`);
+      console.log(`Session saved: ${finalFolderName}`);
       res
         .status(200)
-        .json({ message: `Session saved as "${sanitizedFolderName}"` });
+        .json({ message: `Session saved as "${finalFolderName}"` });
     } catch (error) {
       console.error("Error saving session:", error);
       res.status(500).json({ error: "Failed to save session" });
