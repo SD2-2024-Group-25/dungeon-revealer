@@ -20,7 +20,6 @@ import { selectMapModal_ActiveMap_MapFragment$key } from "./__generated__/select
 import { selectMapModal_ActiveMapQuery } from "./__generated__/selectMapModal_ActiveMapQuery.graphql";
 
 import { useSelectFolderDialog } from "../hooks/use-select-folder-dialog"; // This is for "folder" selection, but just prompts 4 files (1 json, 3 png)
-import { ModalFooter } from "@chakra-ui/react";
 
 const DEFAULT_MAPS_DIR = "../data/defaultmaps";
 const MAPS_DIR = "../data/maps";
@@ -48,7 +47,8 @@ const deleteScenario = async (folderName: string): Promise<void> => {
 const uploadScenario = async (
   files: File[],
   parentFolder: string,
-  folderName: string
+  folderName: string,
+  onSuccess?: () => void //Testing for maplist refresh
 ): Promise<void> => {
   const formattedFiles = await Promise.all(
     files.map(async (file) => ({
@@ -60,12 +60,12 @@ const uploadScenario = async (
   const response = await fetch("/api/upload/scenario", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    //body: JSON.stringify({ files: formattedFiles, folderName }),
     body: JSON.stringify({ files: formattedFiles, parentFolder, folderName }),
   });
 
   if (response.ok) {
     console.log("Successfully uploaded scenario.");
+    onSuccess?.(); //Testing for maplist refresh
   } else {
     console.error("Error uploading scenario.");
   }
@@ -322,7 +322,11 @@ const MapList = (props: {
     loadNext(20);
   });
 
-  React.useEffect(() => props.reportMapsConnectionId(data.maps.__id));
+  //React.useEffect(() => props.reportMapsConnectionId(data.maps.__id));
+  React.useEffect(() => {
+    console.log("Reporting maps connection ID:", data.maps.__id);
+    props.reportMapsConnectionId(data.maps.__id);
+  }, [data.maps.__id, props.reportMapsConnectionId]);
 
   return (
     <ScrollableList.List onScroll={onScroll}>
@@ -464,6 +468,16 @@ export const SelectMapModal = ({
   const [modalState, setModalState] = React.useState<ModalStates | null>(null);
   const [filter, setFilterValue] = React.useState("");
 
+  /*
+  const refreshMapList = React.useCallback(() => {
+    RelayEnvironment.current.fetchQuery(
+      SelectMapModal_MapsQuery,
+      { titleNeedle: filter },
+      { force: true } // Forces a fresh fetch from the server
+    );
+  }, [filter]);
+  */
+
   const response = useQuery<selectMapModal_MapsQuery>(
     SelectMapModal_MapsQuery,
     React.useMemo(
@@ -505,6 +519,8 @@ export const SelectMapModal = ({
     [setFilterValue]
   );
 
+  //const [mapListKey, setMapListKey] = React.useState(0); Test for manual refresh of maplist (not working)
+
   // TODO: find a better way of propagating the inner relay id to his level :)
   const mapsConnectionIdRef = React.useRef("");
 
@@ -512,6 +528,11 @@ export const SelectMapModal = ({
     setModalState({ type: ModalType.CREATE_MAP, data: { file } });
   }, []);
 
+  /*
+  const beforeCreateScenario = React.useCallback((file) => {
+    setModalState({ type: ModalType.CREATE_SCENARIO, data: { file } });
+  }, []);
+  */
   const closeIfPossible = React.useCallback(() => {
     if (!canClose) {
       return;
@@ -613,6 +634,16 @@ export const SelectMapModal = ({
                   onUploadScenario={(files, folderName) => {
                     uploadScenario(files, "maps", folderName);
                   }}
+
+                  /*
+                  onUploadScenario={(files, folderName) => { //Testing for maplist refresh
+                    console.log("Uploading scenario with files:", files, "to folder:", folderName);
+                    uploadScenario(files, "maps", folderName, () => {
+                      console.log("Scenario uploaded, triggering MapList update...");
+                      //refreshMapList(); // Reloads the query
+                    });
+                  }}       
+                    */
                 >
                   <>
                     <Icon.Plus boxSize="20px" />{" "}
@@ -888,8 +919,11 @@ export const SelectScenarioModal = ({
                   tabIndex={1}
                   onClick={() => {
                     deleteScenario(selectedScenario);
-                    setScenarios((prev) =>
-                      prev.filter((scenario) => scenario !== selectedScenario)
+                    setScenarios(
+                      (
+                        prev //Resolves error with empty selectedScenario
+                      ) =>
+                        prev.filter((scenario) => scenario !== selectedScenario)
                     );
                     setSelectedScenario(null);
                   }}
