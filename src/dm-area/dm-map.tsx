@@ -95,6 +95,7 @@ import { dmMap_MapPingMutation } from "./__generated__/dmMap_MapPingMutation.gra
 import { UpdateTokenContext } from "../update-token-context";
 import { IsDungeonMasterContext } from "../is-dungeon-master-context";
 import { LazyLoadedMapView } from "../lazy-loaded-map-view";
+import { typeFromAST } from "graphql";
 
 type ToolMapRecord = {
   name: string;
@@ -622,7 +623,7 @@ const DownloadModal: React.FC<ModalProps> = ({ show, onClose }) => {
       const fetchSessions = async () => {
         try {
           setLoading(true);
-          const response = await fetch("/api/list-sessions"); // Use the updated endpoint for session folders
+          const response = await fetch("/api/list-sessions");
           if (!response.ok) {
             throw new Error("Failed to fetch session list");
           }
@@ -662,32 +663,48 @@ const DownloadModal: React.FC<ModalProps> = ({ show, onClose }) => {
     }
   };
 
+  const handleViewClick = async (session: string) => {
+    try {
+      console.log("Open show modal for " + session); // Tabby
+    } catch (error) {
+      console.error("Error displaying show Modal for session " + session);
+      alert("Error displaying show Modal for session " + session);
+    }
+  };
+
   if (!show) return null;
 
   return (
     <div style={modalOverlayStyle}>
       <div style={modalStyle}>
-        <h2>Session Download</h2>
+        <h2>View & Download Sessions</h2>
         {loading ? (
           <p>Loading sessions...</p>
         ) : error ? (
           <p>{error}</p>
         ) : sessions.length === 0 ? (
-          <p>No sessions available for download</p>
+          <p>No sessions available to view or download</p>
         ) : (
           <>
             <p>Select a session to download:</p>
             <div style={listContainerStyle}>
-              <ul>
+              <ul style={{ padding: 0, listStyle: "none" }}>
                 {sessions.map((session) => (
-                  <ol key={session}>
+                  <li key={session} style={sessionItemStyle}>
+                    <span style={{ flexGrow: 1 }}>{session}</span>
                     <button
-                      onClick={() => handleDownloadClick(session)}
-                      style={buttonStyle}
+                      style={smallButtonStyle}
+                      onClick={() => handleViewClick(session)}
                     >
-                      {session}
+                      View
                     </button>
-                  </ol>
+                    <button
+                      style={smallButtonStyle}
+                      onClick={() => handleDownloadClick(session)}
+                    >
+                      Download
+                    </button>
+                  </li>
                 ))}
               </ul>
             </div>
@@ -776,7 +793,7 @@ const modalStyle: React.CSSProperties = {
   padding: "20px",
   borderRadius: "8px",
   textAlign: "center",
-  width: "300px",
+  width: "500px",
 };
 
 const listContainerStyle: React.CSSProperties = {
@@ -790,6 +807,19 @@ const buttonStyle: React.CSSProperties = {
   padding: "10px 15px",
   width: "100%",
   textAlign: "center",
+  cursor: "pointer",
+};
+
+const sessionItemStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "8px 0",
+};
+
+const smallButtonStyle: React.CSSProperties = {
+  marginLeft: "5px",
+  padding: "5px 10px",
   cursor: "pointer",
 };
 
@@ -1171,7 +1201,7 @@ export const DmMap = (props: {
                 <Toolbar.Item isActive>
                   <Toolbar.Button onClick={openDownloadModal}>
                     <Icon.Download boxSize="20px" />
-                    <Icon.Label>Download Session</Icon.Label>
+                    <Icon.Label>View & Download Session</Icon.Label>
                   </Toolbar.Button>
                 </Toolbar.Item>
                 {/* DownloadModal Component */}
