@@ -12,7 +12,7 @@ const sessionFolder = path.join(downloadsFolder, "session");
 let mapSettingsWatcher = null;
 let isWatchingMapSettings = false;
 let recording = false;
-const debounceTimers = {}; // Debounce timers for map settings
+const debounceTimers = {}; // Debounce timers for map-specific settings
 
 // Function to get a timestamp
 function getTimestamp() {
@@ -43,20 +43,14 @@ async function ensureFoldersExist() {
 }
 
 async function handleMapSettingsChange(mapFolder) {
-  const iterationFolder = path.join(
-    sessionFolder,
-    `Iteration_${getTimestamp()}`
-  );
+  const iterationFolder = path.join(sessionFolder, `Iteration_${getTimestamp()}`);
 
   // Copy the folder contents
   await copyFolder(mapFolder, iterationFolder);
 
   // Update the iteration's settings.json `id` field
   const iterationSettingsPath = path.join(iterationFolder, "settings.json");
-  await updateIterationSettings(
-    iterationSettingsPath,
-    path.basename(iterationFolder)
-  );
+  await updateIterationSettings(iterationSettingsPath, path.basename(iterationFolder));
 }
 
 // Function to update the `id` field in the iteration's settings.json file
@@ -106,6 +100,7 @@ function startWatchingMapSettings(currentMapId) {
 
   mapSettingsWatcher = fs.watch(mapSettingsPath, (eventType) => {
     if (eventType === "change" && shouldRecord(currentMapId)) {
+      // Debounce logic for map file changes
       if (debounceTimers[currentMapId]) {
         clearTimeout(debounceTimers[currentMapId]);
       }
@@ -130,35 +125,42 @@ function stopWatchingMapSettings() {
 // Function to handle changes in the research settings file
 function watchResearchSettingsFile() {
   let previousRecordingState = null;
+  let researchDebounceTimer = null;
 
   fs.watch(researchSettingsPath, async (eventType) => {
     if (eventType === "change") {
-      try {
-        const researchSettings = JSON.parse(
-          fs.readFileSync(researchSettingsPath, "utf-8")
-        );
-        const recordingState = researchSettings.recording;
-
-        if (recordingState !== previousRecordingState) {
-          recording = recordingState === "recording";
-          previousRecordingState = recordingState;
-
-          const mainSettings = JSON.parse(
-            fs.readFileSync(settingsPath, "utf-8")
-          );
-          const currentMapId = mainSettings.currentMapId;
-
-          if (shouldRecord(currentMapId)) {
-            startWatchingMapSettings(currentMapId);
-          } else {
-            stopWatchingMapSettings();
-          }
-        }
-      } catch (err) {
-        console.error(
-          `Error reading or parsing ${researchSettingsPath}: ${err.message}`
-        );
+      // Debounce the research settings watch
+      if (researchDebounceTimer) {
+        clearTimeout(researchDebounceTimer);
       }
+      researchDebounceTimer = setTimeout(() => {
+        try {
+          const researchSettings = JSON.parse(
+            fs.readFileSync(researchSettingsPath, "utf-8")
+          );
+          const recordingState = researchSettings.recording;
+
+          if (recordingState !== previousRecordingState) {
+            recording = recordingState === "recording";
+            previousRecordingState = recordingState;
+
+            const mainSettings = JSON.parse(
+              fs.readFileSync(settingsPath, "utf-8")
+            );
+            const currentMapId = mainSettings.currentMapId;
+
+            if (shouldRecord(currentMapId)) {
+              startWatchingMapSettings(currentMapId);
+            } else {
+              stopWatchingMapSettings();
+            }
+          }
+        } catch (err) {
+          console.error(
+            `Error reading or parsing ${researchSettingsPath}: ${err.message}`
+          );
+        }
+      }, 100); // 100ms debounce delay
     }
   });
 }
@@ -166,27 +168,34 @@ function watchResearchSettingsFile() {
 // Function to watch the main settings file
 function watchMainSettingsFile() {
   let previousMapId = null;
+  let mainDebounceTimer = null;
 
   fs.watch(settingsPath, async (eventType) => {
     if (eventType === "change") {
-      try {
-        const mainSettings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-        const currentMapId = mainSettings.currentMapId;
-
-        if (currentMapId !== previousMapId) {
-          if (shouldRecord(currentMapId)) {
-            stopWatchingMapSettings();
-            startWatchingMapSettings(currentMapId);
-          } else {
-            stopWatchingMapSettings();
-          }
-          previousMapId = currentMapId;
-        }
-      } catch (err) {
-        console.error(
-          `Error reading or parsing ${settingsPath}: ${err.message}`
-        );
+      // Debounce the main settings watch
+      if (mainDebounceTimer) {
+        clearTimeout(mainDebounceTimer);
       }
+      mainDebounceTimer = setTimeout(() => {
+        try {
+          const mainSettings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+          const currentMapId = mainSettings.currentMapId;
+
+          if (currentMapId !== previousMapId) {
+            if (shouldRecord(currentMapId)) {
+              stopWatchingMapSettings();
+              startWatchingMapSettings(currentMapId);
+            } else {
+              stopWatchingMapSettings();
+            }
+            previousMapId = currentMapId;
+          }
+        } catch (err) {
+          console.error(
+            `Error reading or parsing ${settingsPath}: ${err.message}`
+          );
+        }
+      }, 100); // 100ms debounce delay
     }
   });
 }
@@ -199,15 +208,9 @@ function watchMainSettingsFile() {
     // Set initial state: currentMapId = null, recording = "stopped"
     const mainSettings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
     mainSettings.currentMapId = null;
-    fs.writeFileSync(
-      settingsPath,
-      JSON.stringify(mainSettings, null, 2),
-      "utf-8"
-    );
+    fs.writeFileSync(settingsPath, JSON.stringify(mainSettings, null, 2), "utf-8");
 
-    const researchSettings = JSON.parse(
-      fs.readFileSync(researchSettingsPath, "utf-8")
-    );
+    const researchSettings = JSON.parse(fs.readFileSync(researchSettingsPath, "utf-8"));
     researchSettings.recording = "stopped";
     fs.writeFileSync(
       researchSettingsPath,
@@ -229,3 +232,4 @@ function watchMainSettingsFile() {
     console.error(`Error initializing script: ${err.message}`);
   }
 })();
+
