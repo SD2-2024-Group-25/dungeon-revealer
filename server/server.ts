@@ -29,6 +29,7 @@ const uploadRoutes = require("./routes/upload"); //Defines the route for api upl
 const copyRoutes = require("./routes/copy"); //Defines the route for api copy
 const fetchdefaultRoutes = require("./routes/fetch"); //Defines the route for api fetchdefault
 const deleteRoutes = require("./routes/delete"); //Defines the route for api delete
+const { parse } = require("json2csv");
 import archiver from "archiver";
 
 type RequestWithRole = Request & { role: string | null };
@@ -198,15 +199,13 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   });
 
   apiRouter.get("/list-sessions", async (req, res) => {
-    const savedFolderPath = path.join(researchPath, "saved"); // Adjust this path as needed
+    const savedFolderPath = path.join(researchPath, "saved");
 
     try {
-      // Check if the saved folder exists
       if (!fs.existsSync(savedFolderPath)) {
         return res.status(404).json({ error: "Saved folder not found" });
       }
 
-      // List all directories (session folders) in the saved folder
       const files = await fs.readdir(savedFolderPath);
       const sessionFolders = files.filter((file) =>
         fs.statSync(path.join(savedFolderPath, file)).isDirectory()
@@ -216,44 +215,36 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
         return res.status(404).json({ error: "No sessions found" });
       }
 
-      // Return the list of session folder names
       res.json({ sessions: sessionFolders });
     } catch (err) {
-      console.error("Error reading saved folder:", err);
       return res.status(500).json({ error: "Failed to list sessions" });
     }
   });
 
   app.post("/api/recording", (req, res) => {
-    console.log("Recording API route hit"); // Check if the route is being triggered
     const filePath = path.join(researchPath, "settings.json");
-    console.log("File path to write:", filePath); // Debug the file path
 
     fs.readFile(filePath, "utf8", (err, data) => {
       if (err) {
-        console.error("Error reading file:", err);
         return res.status(500).json({ message: "Error reading file" });
       }
 
       let jsonData;
       try {
-        jsonData = JSON.parse(data); // Parse the JSON content
+        jsonData = JSON.parse(data);
       } catch (e) {
-        console.error("Error parsing JSON:", e);
         return res.status(500).json({ message: "Error parsing JSON" });
       }
 
       const updatedState =
         jsonData.recording === "recording" ? "stopped" : "recording";
       jsonData.recording = updatedState;
-      console.log("Updated recording state:", updatedState); // Check updated state
+      console.log("Updated recording state:", updatedState);
 
       fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), (err) => {
         if (err) {
-          console.error("Error writing file:", err);
           return res.status(500).json({ message: "Error updating file" });
         }
-        console.log("File written successfully"); // Confirm file was written
         res.json({ recording: updatedState });
       });
     });
@@ -269,15 +260,12 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     try {
       const filePath = path.join(notes_folder, `${userId}_notes.txt`);
 
-      // Ensure the folder exists
       await fs.ensureDir(notes_folder);
 
-      // Ensure the file exists before writing
       await fs.ensureFile(filePath);
 
       const formattedContent = `User: ${userName}\n\n${content}`;
 
-      // Write notes to file
       await fs.writeFile(filePath, formattedContent, "utf8");
       console.log(`Notes saved: ${filePath}`);
 
@@ -288,7 +276,6 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
-  // **API to Retrieve Notes**
   app.get("/api/get-notes/:userId", async (req, res) => {
     const { userId } = req.params;
 
@@ -343,13 +330,12 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       return res.status(400).json({ error: "Session name is required" });
     }
 
-    const sanitizedFolderName = name.replace(/[^a-zA-Z0-9-_]/g, "_"); // Sanitize name
+    const sanitizedFolderName = name.replace(/[^a-zA-Z0-9-_]/g, "_");
     const currentDate = new Date().toISOString().split("T")[0];
 
     let finalFolderName = `${sanitizedFolderName}_${currentDate}`;
     const savedPath = path.join(researchPath, "saved");
 
-    // Function to find a unique folder name by appending _1, _2, etc.
     function getUniqueFolderName(baseName: string) {
       let counter = 1;
       let uniqueName = baseName;
@@ -369,27 +355,24 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     const destinationNotesFolder = path.join(destinationFolder, "notes");
 
     try {
-      // Ensure source session folder exists
       if (!fs.existsSync(sourceSessionFolder)) {
         return res.status(404).json({ error: "Session folder not found" });
       }
 
-      // Ensure saved sessions folder exists
       if (!fs.existsSync(savedPath)) {
         fs.mkdirSync(savedPath, { recursive: true });
       }
 
-      // Copy session folder
       copyFolderRecursive(sourceSessionFolder, destinationFolder);
 
-      // Copy notes folder
+      createSessionCSV(sourceSessionFolder, destinationFolder);
+
       if (fs.existsSync(sourceNotesFolder)) {
         copyFolderRecursive(sourceNotesFolder, destinationNotesFolder);
       } else {
         console.warn("Notes folder does not exist, skipping copy.");
       }
 
-      // Clean up session folder after copying
       deleteFolderContents(sourceSessionFolder);
       deleteFolderContents(sourceNotesFolder);
 
@@ -403,6 +386,133 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
+  function createSessionCSV(
+    sourceSessionFolder: string,
+    destinationFolder: string
+  ) {
+    const csvFilePath = path.join(destinationFolder, "session_data.csv");
+    let dataRows: {
+      iteration_id: any;
+      token_label: any;
+      token_id: any;
+      token_x: any;
+      token_y: any;
+      token_visible: any;
+      player_movable: any;
+    }[] = [];
+    let scenarioTitle = "";
+
+    const iterationFolders = fs
+      .readdirSync(sourceSessionFolder)
+      .filter((folder) => folder.startsWith("Iteration_"));
+
+    iterationFolders.forEach((folder) => {
+      const sessionFilePath = path.join(
+        sourceSessionFolder,
+        folder,
+        "settings.json"
+      );
+
+      if (fs.existsSync(sessionFilePath)) {
+        try {
+          const sessionData = JSON.parse(
+            fs.readFileSync(sessionFilePath, "utf8")
+          );
+
+          const { id, title, tokens } = sessionData;
+          scenarioTitle = title || "Untitled Scenario";
+
+          tokens.forEach(
+            (token: {
+              label: any;
+              id: any;
+              x: any;
+              y: any;
+              isVisibleForPlayers: any;
+              isMovableByPlayers: any;
+            }) => {
+              dataRows.push({
+                iteration_id: id,
+                token_label: token.label || "Unknown",
+                token_id: token.id,
+                token_x: token.x,
+                token_y: token.y,
+                token_visible: token.isVisibleForPlayers,
+                player_movable: token.isMovableByPlayers,
+              });
+            }
+          );
+        } catch (err) {
+          console.error(`Error reading JSON from ${sessionFilePath}:`, err);
+        }
+      }
+    });
+
+    if (dataRows.length === 0) {
+      console.warn("No valid session data found.");
+      return;
+    }
+
+    formatAndWriteCSV(dataRows, csvFilePath, scenarioTitle);
+  }
+
+  function formatAndWriteCSV(
+    dataRows: any[],
+    filePath: number | fs.PathLike,
+    title: string
+  ) {
+    let csvContent = [];
+
+    csvContent.push(`Title,${title},,,,`);
+    csvContent.push(`,,,,,`);
+
+    csvContent.push(
+      `Iteration,Token Label,Token Id,X,Y,Token Visible,Player Movable`
+    );
+
+    const groupedData = dataRows.reduce(
+      (acc: { [x: string]: any[] }, row: { iteration_id: string | number }) => {
+        if (!acc[row.iteration_id]) {
+          acc[row.iteration_id] = [];
+        }
+        acc[row.iteration_id].push(row);
+        return acc;
+      },
+      {}
+    );
+
+    for (const iteration in groupedData) {
+      const tokens = groupedData[iteration];
+
+      const timePart = iteration.replace("Iteration_", "").replace(/_/g, ":");
+
+      csvContent.push(
+        `${timePart},${tokens[0].token_label},${
+          tokens[0].token_id
+        },${tokens[0].token_x.toFixed(6)},${tokens[0].token_y.toFixed(
+          6
+        )},${tokens[0].token_visible
+          .toString()
+          .toUpperCase()},${tokens[0].player_movable.toString().toUpperCase()}`
+      );
+
+      for (let i = 1; i < tokens.length; i++) {
+        const token = tokens[i];
+        csvContent.push(
+          `,${token.token_label},${token.token_id},${token.token_x.toFixed(
+            6
+          )},${token.token_y.toFixed(6)},${token.token_visible
+            .toString()
+            .toUpperCase()},${token.player_movable.toString().toUpperCase()}`
+        );
+      }
+
+      csvContent.push(`,,,,,,`);
+    }
+
+    fs.writeFileSync(filePath, csvContent.join("\n"), "utf8");
+  }
+
   function copyFolderRecursive(source: any, target: any) {
     if (!fs.existsSync(target)) {
       fs.mkdirSync(target, { recursive: true });
@@ -413,10 +523,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       const destPath = path.join(target, entry.name);
 
       if (entry.isDirectory()) {
-        // Recursively copy subfolders
         copyFolderRecursive(srcPath, destPath);
       } else {
-        // Copy individual files
         fs.copyFileSync(srcPath, destPath);
       }
     });
@@ -427,9 +535,9 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       fs.readdirSync(folderPath).forEach((file) => {
         const curPath = path.join(folderPath, file);
         if (fs.lstatSync(curPath).isDirectory()) {
-          fs.rmSync(curPath, { recursive: true, force: true }); // Deletes subdirectories
+          fs.rmSync(curPath, { recursive: true, force: true });
         } else {
-          fs.unlinkSync(curPath); // Deletes files
+          fs.unlinkSync(curPath);
         }
       });
     }
