@@ -7,6 +7,7 @@ const settingsPath = path.join(basePath, "..", "data", "settings.json"); // sett
 const researchSettingsPath = path.join(basePath, "research", "settings.json"); // settings of recording
 const downloadsFolder = path.join(basePath, "research", "downloads");
 const savedFolder = path.join(basePath, "research", "saved");
+const notesFolder = path.join(basePath, "research", "notes");
 const sessionFolder = path.join(downloadsFolder, "session");
 
 let mapSettingsWatcher = null;
@@ -34,6 +35,7 @@ async function ensureFoldersExist() {
     // Ensure the downloads folder exists
     await mkdir(downloadsFolder, { recursive: true });
     await mkdir(savedFolder, { recursive: true });
+    await mkdir(notesFolder, { recursive: true });
 
     // Ensure the session folder exists
     await mkdir(sessionFolder, { recursive: true });
