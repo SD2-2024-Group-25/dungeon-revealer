@@ -611,10 +611,14 @@ interface ModalProps {
   show: boolean;
   onClose: () => void;
   //added 3/11
-  onViewClick?: (sessionname: string) => void; 
+  onViewClick?: (sessionname: string) => void;
 }
 
-const DownloadModal: React.FC<ModalProps> = ({ show, onClose, onViewClick}) => {
+const DownloadModal: React.FC<ModalProps> = ({
+  show,
+  onClose,
+  onViewClick,
+}) => {
   const [sessions, setSessions] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -670,8 +674,8 @@ const DownloadModal: React.FC<ModalProps> = ({ show, onClose, onViewClick}) => {
     onViewClick?.(session);
     onClose();
     console.log("DownloadModal: View clicked for", session);
-   /* try {
-      console.log("Open show modal for " + session); // Tabby
+    /* try {
+      console.log("Open show modal for " + session); // Tabby + Meg
     } catch (error) {
       console.error("Error displaying show Modal for session " + session);
       alert("Error displaying show Modal for session " + session);
@@ -732,13 +736,12 @@ interface ViewModalProps {
   onSessionSelect: (session: string) => void;
 }
 
-const ViewModal: React.FC<ViewModalProps> =({
+const ViewModal: React.FC<ViewModalProps> = ({
   show,
   onClose,
   sessionName,
-  onSessionSelect
+  onSessionSelect,
 }) => {
-
   const [sessions, setSessions] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -754,7 +757,7 @@ const ViewModal: React.FC<ViewModalProps> =({
             throw new Error("Failed to fetch sessions");
           }
           const data = await response.json();
-          setSessions(data.sessions); 
+          setSessions(data.sessions);
         } catch (err) {
           console.error("Error fetching sessions:", err);
           setError("Failed to load sessions");
@@ -766,58 +769,55 @@ const ViewModal: React.FC<ViewModalProps> =({
     }
   }, [show]);
 
-
   if (!show) return null;
 
   return (
     <div style={viewModalOverlayStyle}>
       <div style={viewModalStyle}>
-        <div style={{ display: "flex", height: "calc(100% - 40px"}}>
+        <div style={{ display: "flex", height: "calc(100% - 40px" }}>
           {/* Left Sidebar: scrollable list of sessions */}
           <div
             style={{
-              width:"200px",
+              width: "200px",
               borderRight: "1px solid #ccc",
               overflowY: "auto",
-              padding: "10px"
+              padding: "10px",
             }}
-            >
-              {loading ? (
-                <p>Loading sessions...</p>
-              ) : error ? (
-                <p>{error}</p>
-              ) : sessions.length === 0 ? (
-                <p>No sessions available</p>
-              ) : (
-                <ul style={{ listStyle:"none", padding: 0, margin: 0 }}>
-                  {sessions.map((session) => (
-                    <li key={session} style={sessionItemStyle}>
-                      <span style={{ flexGrow: 1 }}>{session}</span>
-                      <button
-                        style={smallButtonStyle}
-                        onClick={() => onSessionSelect(session)
-                        }
-                      >
-                        Select
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+          >
+            {loading ? (
+              <p>Loading sessions...</p>
+            ) : error ? (
+              <p>{error}</p>
+            ) : sessions.length === 0 ? (
+              <p>No sessions available</p>
+            ) : (
+              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                {sessions.map((session) => (
+                  <li key={session} style={sessionItemStyle}>
+                    <span style={{ flexGrow: 1 }}>{session}</span>
+                    <button
+                      style={smallButtonStyle}
+                      onClick={() => onSessionSelect(session)}
+                    >
+                      Select
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
         {/* Right Panel: display details of the selected session */}
-          { /*Session Name Header*/ }
-          <div style={{display: "flex", justifyContent: "center"}}>
+        {/*Session Name Header*/}
+        <div style={{ display: "flex", justifyContent: "center" }}>
           <h2>Session: {sessionName}</h2>
-          </div>
-        { /* Close button below the chosen iteration */ }
+        </div>
+        {/* Close button below the chosen iteration */}
         {/*<div style={{ marginTop: "10px", textAlign: "center"}}>*/}
-          <button onClick={onClose} style={viewCloseButtonStyle}>
-            Close
-          </button>
+        <button onClick={onClose} style={viewCloseButtonStyle}>
+          Close
+        </button>
         {/*</div>*/}
-        
       </div>
     </div>
   );
@@ -882,7 +882,6 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
   );
 };
 
-
 const viewModalOverlayStyle: React.CSSProperties = {
   position: "fixed",
   top: 0,
@@ -902,7 +901,7 @@ const viewModalStyle: React.CSSProperties = {
   textAlign: "center",
   width: "80vw",
   height: "80vh",
-  zIndex: 1000000000
+  zIndex: 1000000000,
 };
 
 const modalOverlayStyle: React.CSSProperties = {
@@ -1122,7 +1121,8 @@ export const DmMap = (props: {
     }
   };
 
-  const [isDownloadModalVisible, setDownloadModalVisible] = React.useState(false);
+  const [isDownloadModalVisible, setDownloadModalVisible] =
+    React.useState(false);
   const [isSaveModalVisible, setSaveModalVisible] = React.useState(false);
 
   const openDownloadModal = async () => {
@@ -1145,11 +1145,14 @@ export const DmMap = (props: {
   const [selectedSessionName, setSelectedSessionName] = React.useState("");
 
   const handleViewClick = (sessionName: string) => {
-    console.log("in handleViewClick in [DmMap] handleViewClick triggered with:", sessionName);
+    console.log(
+      "in handleViewClick in [DmMap] handleViewClick triggered with:",
+      sessionName
+    );
     setSelectedSessionName(sessionName);
     setViewModalOpen(true);
   };
- 
+
   return (
     <FlatContextProvider
       value={[
@@ -1738,4 +1741,3 @@ const GridConfigurator = (props: {
     </Stack>
   );
 };
-
