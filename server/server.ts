@@ -32,7 +32,7 @@ const copyRoutes = require("./routes/copy"); //Defines the route for api copy
 const fetchMapRoutes = require("./routes/fetch_maps"); //Defines the route for api fetchdefault
 const fetchdefaultRoutes = require("./routes/fetch_default"); //Defines the route for api fetchdefault
 const deleteRoutes = require("./routes/delete"); //Defines the route for api delete
-const { parse } = require("json2csv");
+//const { parse } = require("json2csv");
 import archiver from "archiver";
 
 type RequestWithRole = Request & { role: string | null };

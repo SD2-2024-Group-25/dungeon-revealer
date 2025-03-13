@@ -20,7 +20,7 @@ import { selectMapModal_ActiveMap_MapFragment$key } from "./__generated__/select
 import { selectMapModal_ActiveMapQuery } from "./__generated__/selectMapModal_ActiveMapQuery.graphql";
 
 import { useSelectFolderDialog } from "../hooks/use-select-folder-dialog"; // This is for "folder" selection, but just prompts 4 files (1 json, 3 png)
-import { useRelayEnvironment } from "relay-hooks";
+import { createContext, useContext, useState } from "react";
 
 // deleteScenario function to call API and delete a selected map
 const deleteScenario = async (folderName: string): Promise<void> => {
@@ -517,6 +517,10 @@ export const SelectMapModal = ({
     closeModal();
   }, [closeModal, canClose]);
 
+  const close = React.useCallback(() => {
+    closeModal();
+  }, [closeModal]);
+
   return (
     <>
       <Modal onClickOutside={closeIfPossible} onPressEscape={closeIfPossible}>
@@ -609,6 +613,7 @@ export const SelectMapModal = ({
                   fullWidth
                   onUploadScenario={(files, folderName) => {
                     uploadScenario(files, "maps", folderName);
+                    close();
                   }}
                 >
                   <>
@@ -773,6 +778,10 @@ export const SelectScenarioModal = ({
   );
   const [showNamingModal, setShowNamingModal] = React.useState(false);
 
+  const close = React.useCallback(() => {
+    closeModal();
+  }, [closeModal]);
+
   //Fetch scenarios from the "defaultmaps" directory (used for list)
   React.useEffect(() => {
     fetch("/api/fetch_default/defaultmaps")
@@ -866,6 +875,7 @@ export const SelectScenarioModal = ({
                 fullWidth
                 onUploadScenario={(files, folderName) => {
                   uploadScenario(files, "defaultmaps", folderName);
+                  close();
                 }}
               >
                 <>
@@ -923,6 +933,7 @@ export const SelectScenarioModal = ({
           onSubmit={(newScenarioName) => {
             onCreateScenario(selectedScenario, newScenarioName);
             setShowNamingModal(false);
+            close();
           }}
         />
       )}

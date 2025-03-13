@@ -271,7 +271,7 @@ export class Maps {
         return map;
       });
 
-      console.log("Reload complete. Maps:", this._maps);
+      //console.log("Reload complete. Maps:", this._maps);
     } catch (err) {
       console.error("Failed to reload maps:", err);
       throw err;
