@@ -131,19 +131,20 @@ const PlayerMap = ({
             const excalidrawUrl = import.meta.env.VITE_EXCALIDRAW_URL;
             const url = new URL(excalidrawUrl);
 
-            // 2) Add user-specific query params
-            url.searchParams.append("username", user.name);
-            url.searchParams.append("userID", user.id);
-
             // 3) Grab the clicked link from the chat
             const clickedLink = event.data.payload?.href;
             if (clickedLink) {
               // Parse the full URL so we can get the entire "#room=..."
               const parsedLink = new URL(clickedLink, window.location.origin);
-              // Copy the entire hash (including the comma + encryption key)
               url.hash = parsedLink.hash;
+
+              // ✅ Append _COLLAB to the username ONLY when the link is clicked from chat
+              url.searchParams.append("username", `${user.name}_COLLAB`);
             } else {
-              // Fallback if no link was supplied (use your saved link)
+              // 🛑 If no clicked link, keep the username as it is
+              url.searchParams.append("username", user.name);
+
+              // Fallback to using a saved collaboration link
               const savedCollabLink = getCollaborationLink();
               if (savedCollabLink) {
                 const collabUrl = new URL(savedCollabLink);
@@ -151,7 +152,10 @@ const PlayerMap = ({
               }
             }
 
-            // 4) Open the final URL in your iframe
+            // 4) Keep userID intact
+            url.searchParams.append("userID", user.id);
+
+            // 5) Open the final URL in your iframe
             setIframeUrl(url.toString());
             setIsIframeOpen(true);
           } catch (error) {
