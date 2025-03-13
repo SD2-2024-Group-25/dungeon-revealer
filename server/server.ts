@@ -233,6 +233,33 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
+  //just added
+  apiRouter.get("/list-iterations/:folder", async (req, res) => {
+    const folderName = req.params.folder; // Dynamically get folder name
+    const targetFolderPath = path.join(researchPath, "saved", folderName);
+
+    try {
+      if (!fs.existsSync(targetFolderPath)) {
+        return res
+          .status(404)
+          .json({ error: `Folder "${folderName}" not found` });
+      }
+
+      const files = await fs.readdir(targetFolderPath);
+      const iterationFolders = files.filter((file) =>
+        fs.statSync(path.join(targetFolderPath, file)).isDirectory()
+      );
+
+      if (iterationFolders.length === 0) {
+        return res.status(404).json({ error: "No sessions found" });
+      }
+
+      res.json({ iterations: iterationFolders });
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to list iterations" });
+    }
+  });
+
   app.post("/api/recording", (req, res) => {
     const filePath = path.join(researchPath, "settings.json");
 

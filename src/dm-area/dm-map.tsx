@@ -610,9 +610,15 @@ const DMMapFragment = graphql`
 interface ModalProps {
   show: boolean;
   onClose: () => void;
+  //added 3/11
+  onViewClick?: (sessionname: string) => void;
 }
 
-const DownloadModal: React.FC<ModalProps> = ({ show, onClose }) => {
+const DownloadModal: React.FC<ModalProps> = ({
+  show,
+  onClose,
+  onViewClick,
+}) => {
   const [sessions, setSessions] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -664,12 +670,16 @@ const DownloadModal: React.FC<ModalProps> = ({ show, onClose }) => {
   };
 
   const handleViewClick = async (session: string) => {
-    try {
+    //added 3/11
+    onViewClick?.(session);
+    onClose();
+    console.log("DownloadModal: View clicked for", session);
+    /* try {
       console.log("Open show modal for " + session); // Tabby
     } catch (error) {
       console.error("Error displaying show Modal for session " + session);
       alert("Error displaying show Modal for session " + session);
-    }
+    }*/
   };
 
   if (!show) return null;
@@ -711,6 +721,171 @@ const DownloadModal: React.FC<ModalProps> = ({ show, onClose }) => {
           </>
         )}
         <button onClick={onClose} style={closeButtonStyle}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+};
+
+//added 3/11: from here
+interface ViewModalProps {
+  show: boolean;
+  onClose: () => void;
+  sessionName: string;
+  onSessionSelect: (session: string) => void;
+}
+
+interface ViewModalProps {
+  show: boolean;
+  onClose: () => void;
+  sessionName: string;
+  onSessionSelect: (session: string) => void;
+}
+
+const ViewModal: React.FC<ViewModalProps> = ({
+  show,
+  onClose,
+  sessionName,
+  onSessionSelect,
+}) => {
+  const [sessions, setSessions] = React.useState<string[]>([]);
+  const [iterations, setIterations] = React.useState<string[]>([]);
+  const [selectedIteration, setSelectedIteration] = React.useState<
+    string | null
+  >(null);
+  const [loading, setLoading] = React.useState<boolean>(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Fetch sessions if modal is shown and no session is selected
+  React.useEffect(() => {
+    if (show && !sessionName) {
+      const fetchSessions = async () => {
+        try {
+          setLoading(true);
+          const response = await fetch("/api/list-sessions");
+          if (!response.ok) {
+            throw new Error("Failed to fetch sessions");
+          }
+          const data = await response.json();
+          setSessions(data.sessions);
+        } catch (err) {
+          console.error("Error fetching sessions:", err);
+          setError("Failed to load sessions");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchSessions();
+    }
+  }, [show, sessionName]);
+
+  // When a session is selected, fetch its iterations
+  React.useEffect(() => {
+    if (show && sessionName) {
+      const fetchIterations = async () => {
+        try {
+          setLoading(true);
+          const response = await fetch(`/api/list-iterations/${sessionName}`);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch iterations for ${sessionName}`);
+          }
+          const data = await response.json();
+          setIterations(data.iterations);
+        } catch (err) {
+          console.error("Error fetching iterations:", err);
+          setError("Failed to load iterations");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchIterations();
+      setSelectedIteration(null);
+    }
+  }, [show, sessionName]);
+
+  if (!show) return null;
+
+  return (
+    <div style={viewModalOverlayStyle}>
+      <div style={viewModalStyle}>
+        <div style={{ display: "flex", height: "calc(100% - 40px)" }}>
+          {/* Left Sidebar */}
+          <div
+            style={{
+              width: "200px",
+              borderRight: "1px solid #ccc",
+              overflowY: "auto",
+              padding: "10px",
+            }}
+          >
+            {loading ? (
+              <p>Loading...</p>
+            ) : error ? (
+              <p>{error}</p>
+            ) : !sessionName ? (
+              sessions.length === 0 ? (
+                <p>No sessions available</p>
+              ) : (
+                <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                  {sessions.map((session) => (
+                    <li key={session} style={sessionItemStyle}>
+                      <span style={{ flexGrow: 1 }}>{session}</span>
+                      <button
+                        style={smallButtonStyle}
+                        onClick={() => onSessionSelect(session)}
+                      >
+                        Select
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : iterations.length === 0 ? (
+              <p>No iterations available</p>
+            ) : (
+              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                {iterations.map((iteration) => (
+                  <li key={iteration} style={sessionItemStyle}>
+                    <span style={{ flexGrow: 1 }}>{iteration}</span>
+                    <button
+                      style={smallButtonStyle}
+                      onClick={() => setSelectedIteration(iteration)}
+                    >
+                      View Map
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {/* Right Panel */}
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              padding: "10px",
+            }}
+          >
+            {sessionName ? (
+              <>
+                <h2>Session: {sessionName}</h2>
+                {selectedIteration ? (
+                  <>
+                    <h3>Iteration: {selectedIteration}</h3>
+                  </>
+                ) : (
+                  <p>Please select an iteration</p>
+                )}
+              </>
+            ) : (
+              <p>Please select a session</p>
+            )}
+          </div>
+        </div>
+        <button onClick={onClose} style={viewCloseButtonStyle}>
           Close
         </button>
       </div>
@@ -776,6 +951,30 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
   );
 };
 
+const viewModalOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 1001,
+};
+
+const viewModalStyle: React.CSSProperties = {
+  position: "relative",
+  background: "white",
+  padding: "20px",
+  borderRadius: "8px",
+  textAlign: "center",
+  width: "80vw",
+  height: "80vh",
+  zIndex: 1000000000,
+};
+
 const modalOverlayStyle: React.CSSProperties = {
   position: "fixed",
   top: 0,
@@ -826,6 +1025,18 @@ const smallButtonStyle: React.CSSProperties = {
 const closeButtonStyle: React.CSSProperties = {
   marginTop: "20px",
   padding: "10px 15px",
+  cursor: "pointer",
+};
+
+const viewCloseButtonStyle: React.CSSProperties = {
+  position: "absolute",
+  bottom: "20px",
+  left: "50%",
+  transform: "translateX(-50%)",
+  //right: "10px",
+  //padding: "5px 10px",
+  //marginTop: "20px",
+  //padding: "10px 15px",
   cursor: "pointer",
 };
 
@@ -999,6 +1210,18 @@ export const DmMap = (props: {
 
   const closeSaveModal = () => {
     setSaveModalVisible(false);
+  };
+
+  const [isViewModalOpen, setViewModalOpen] = React.useState(false);
+  const [selectedSessionName, setSelectedSessionName] = React.useState("");
+
+  const handleViewClick = (sessionName: string) => {
+    console.log(
+      "in handleViewClick in [DmMap] handleViewClick triggered with:",
+      sessionName
+    );
+    setSelectedSessionName(sessionName);
+    setViewModalOpen(true);
   };
 
   return (
@@ -1208,6 +1431,13 @@ export const DmMap = (props: {
                 <DownloadModal
                   show={isDownloadModalVisible}
                   onClose={closeDownloadModal}
+                  onViewClick={handleViewClick}
+                />
+                {/* ViewModal Component- added 3/11*/}
+                <ViewModal
+                  show={isViewModalOpen}
+                  onClose={() => setViewModalOpen(false)}
+                  sessionName={selectedSessionName}
                 />
                 <Toolbar.Item isActive>
                   <Toolbar.Button onClick={openSaveModal}>
