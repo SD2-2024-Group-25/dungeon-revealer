@@ -96,6 +96,7 @@ import { UpdateTokenContext } from "../update-token-context";
 import { IsDungeonMasterContext } from "../is-dungeon-master-context";
 import { LazyLoadedMapView } from "../lazy-loaded-map-view";
 import { typeFromAST } from "graphql";
+import { position } from "polished";
 
 type ToolMapRecord = {
   name: string;
@@ -757,6 +758,8 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState<boolean>(true);
+
   // Fetch sessions if modal is shown and no session is selected
   React.useEffect(() => {
     if (show && !sessionName) {
@@ -809,56 +812,72 @@ const ViewModal: React.FC<ViewModalProps> = ({
   return (
     <div style={viewModalOverlayStyle}>
       <div style={viewModalStyle}>
+        {/* A button to toggle the sidebar */}
+        <button
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          style={{
+            position: "absolute",
+            left: isSidebarOpen ? "225px" : "10px",
+            cursor: "pointer",
+            overflow: "hidden",
+            transition: "width 0.3s ease",
+          }}
+        >
+          {isSidebarOpen ? "Close" : "Open"}
+        </button>
+
         <div style={{ display: "flex", height: "calc(100% - 40px)" }}>
           {/* Left Sidebar */}
-          <div
-            style={{
-              width: "200px",
-              borderRight: "1px solid #ccc",
-              overflowY: "auto",
-              padding: "10px",
-            }}
-          >
-            {loading ? (
-              <p>Loading...</p>
-            ) : error ? (
-              <p>{error}</p>
-            ) : !sessionName ? (
-              sessions.length === 0 ? (
-                <p>No sessions available</p>
+          {isSidebarOpen && (
+            <div
+              style={{
+                width: "200px",
+                borderRight: "1px solid #ccc",
+                overflowY: "auto",
+                padding: "10px",
+              }}
+            >
+              {loading ? (
+                <p>Loading...</p>
+              ) : error ? (
+                <p>{error}</p>
+              ) : !sessionName ? (
+                sessions.length === 0 ? (
+                  <p>No sessions available</p>
+                ) : (
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                    {sessions.map((session) => (
+                      <li key={session} style={sessionItemStyle}>
+                        <span style={{ flexGrow: 1 }}>{session}</span>
+                        <button
+                          style={smallButtonStyle}
+                          onClick={() => onSessionSelect(session)}
+                        >
+                          Select
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : iterations.length === 0 ? (
+                <p>No iterations available</p>
               ) : (
                 <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                  {sessions.map((session) => (
-                    <li key={session} style={sessionItemStyle}>
-                      <span style={{ flexGrow: 1 }}>{session}</span>
+                  {iterations.map((iteration) => (
+                    <li key={iteration} style={sessionItemStyle}>
+                      <span style={{ flexGrow: 1 }}>{iteration}</span>
                       <button
                         style={smallButtonStyle}
-                        onClick={() => onSessionSelect(session)}
+                        onClick={() => setSelectedIteration(iteration)}
                       >
-                        Select
+                        View Map
                       </button>
                     </li>
                   ))}
                 </ul>
-              )
-            ) : iterations.length === 0 ? (
-              <p>No iterations available</p>
-            ) : (
-              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                {iterations.map((iteration) => (
-                  <li key={iteration} style={sessionItemStyle}>
-                    <span style={{ flexGrow: 1 }}>{iteration}</span>
-                    <button
-                      style={smallButtonStyle}
-                      onClick={() => setSelectedIteration(iteration)}
-                    >
-                      View Map
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+              )}
+            </div>
+          )}
           {/* Right Panel */}
           <div
             style={{
@@ -871,10 +890,10 @@ const ViewModal: React.FC<ViewModalProps> = ({
           >
             {sessionName ? (
               <>
-                <h2>Session: {sessionName}</h2>
+                <h2>{sessionName}</h2>
                 {selectedIteration ? (
                   <>
-                    <h3>Iteration: {selectedIteration}</h3>
+                    <h3>{selectedIteration}</h3>
                   </>
                 ) : (
                   <p>Please select an iteration</p>
