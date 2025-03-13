@@ -675,7 +675,7 @@ const DownloadModal: React.FC<ModalProps> = ({
     onClose();
     console.log("DownloadModal: View clicked for", session);
     /* try {
-      console.log("Open show modal for " + session); // Tabby + Meg
+      console.log("Open show modal for " + session); // Tabby
     } catch (error) {
       console.error("Error displaying show Modal for session " + session);
       alert("Error displaying show Modal for session " + session);
@@ -736,6 +736,13 @@ interface ViewModalProps {
   onSessionSelect: (session: string) => void;
 }
 
+interface ViewModalProps {
+  show: boolean;
+  onClose: () => void;
+  sessionName: string;
+  onSessionSelect: (session: string) => void;
+}
+
 const ViewModal: React.FC<ViewModalProps> = ({
   show,
   onClose,
@@ -743,12 +750,16 @@ const ViewModal: React.FC<ViewModalProps> = ({
   onSessionSelect,
 }) => {
   const [sessions, setSessions] = React.useState<string[]>([]);
+  const [iterations, setIterations] = React.useState<string[]>([]);
+  const [selectedIteration, setSelectedIteration] = React.useState<
+    string | null
+  >(null);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Fetch the session list whenever the modal is shown
+  // Fetch sessions if modal is shown and no session is selected
   React.useEffect(() => {
-    if (show) {
+    if (show && !sessionName) {
       const fetchSessions = async () => {
         try {
           setLoading(true);
@@ -767,15 +778,39 @@ const ViewModal: React.FC<ViewModalProps> = ({
       };
       fetchSessions();
     }
-  }, [show]);
+  }, [show, sessionName]);
+
+  // When a session is selected, fetch its iterations
+  React.useEffect(() => {
+    if (show && sessionName) {
+      const fetchIterations = async () => {
+        try {
+          setLoading(true);
+          const response = await fetch(`/api/list-iterations/${sessionName}`);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch iterations for ${sessionName}`);
+          }
+          const data = await response.json();
+          setIterations(data.iterations);
+        } catch (err) {
+          console.error("Error fetching iterations:", err);
+          setError("Failed to load iterations");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchIterations();
+      setSelectedIteration(null);
+    }
+  }, [show, sessionName]);
 
   if (!show) return null;
 
   return (
     <div style={viewModalOverlayStyle}>
       <div style={viewModalStyle}>
-        <div style={{ display: "flex", height: "calc(100% - 40px" }}>
-          {/* Left Sidebar: scrollable list of sessions */}
+        <div style={{ display: "flex", height: "calc(100% - 40px)" }}>
+          {/* Left Sidebar */}
           <div
             style={{
               width: "200px",
@@ -785,44 +820,78 @@ const ViewModal: React.FC<ViewModalProps> = ({
             }}
           >
             {loading ? (
-              <p>Loading sessions...</p>
+              <p>Loading...</p>
             ) : error ? (
               <p>{error}</p>
-            ) : sessions.length === 0 ? (
-              <p>No sessions available</p>
+            ) : !sessionName ? (
+              sessions.length === 0 ? (
+                <p>No sessions available</p>
+              ) : (
+                <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                  {sessions.map((session) => (
+                    <li key={session} style={sessionItemStyle}>
+                      <span style={{ flexGrow: 1 }}>{session}</span>
+                      <button
+                        style={smallButtonStyle}
+                        onClick={() => onSessionSelect(session)}
+                      >
+                        Select
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : iterations.length === 0 ? (
+              <p>No iterations available</p>
             ) : (
               <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                {sessions.map((session) => (
-                  <li key={session} style={sessionItemStyle}>
-                    <span style={{ flexGrow: 1 }}>{session}</span>
+                {iterations.map((iteration) => (
+                  <li key={iteration} style={sessionItemStyle}>
+                    <span style={{ flexGrow: 1 }}>{iteration}</span>
                     <button
                       style={smallButtonStyle}
-                      onClick={() => onSessionSelect(session)}
+                      onClick={() => setSelectedIteration(iteration)}
                     >
-                      Select
+                      View Map
                     </button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
+          {/* Right Panel */}
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              padding: "10px",
+            }}
+          >
+            {sessionName ? (
+              <>
+                <h2>Session: {sessionName}</h2>
+                {selectedIteration ? (
+                  <>
+                    <h3>Iteration: {selectedIteration}</h3>
+                  </>
+                ) : (
+                  <p>Please select an iteration</p>
+                )}
+              </>
+            ) : (
+              <p>Please select a session</p>
+            )}
+          </div>
         </div>
-        {/* Right Panel: display details of the selected session */}
-        {/*Session Name Header*/}
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <h2>Session: {sessionName}</h2>
-        </div>
-        {/* Close button below the chosen iteration */}
-        {/*<div style={{ marginTop: "10px", textAlign: "center"}}>*/}
         <button onClick={onClose} style={viewCloseButtonStyle}>
           Close
         </button>
-        {/*</div>*/}
       </div>
     </div>
   );
 };
-//to here
 
 const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
   const [sessionName, setSessionName] = React.useState("");
@@ -895,6 +964,7 @@ const viewModalOverlayStyle: React.CSSProperties = {
 };
 
 const viewModalStyle: React.CSSProperties = {
+  position: "relative",
   background: "white",
   padding: "20px",
   borderRadius: "8px",
