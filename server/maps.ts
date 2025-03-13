@@ -181,6 +181,103 @@ export class Maps {
     });
   }
 
+  async reload(): Promise<void> {
+    try {
+      //console.log("Reloading maps: Reading directory", this._mapsDirectoryPath); // debug
+
+      // Read all entries in the maps directory synchronously.
+      const mapDirectories = fs
+        .readdirSync(this._mapsDirectoryPath)
+        .filter(junk.not)
+        .map((id) => this._buildMapFolderPath(id))
+        .filter(isDirectory);
+
+      //console.log("Found map directories: ", mapDirectories); // debug
+
+      // For each directory (each representing a map), build a MapEntity object.
+      this._maps = mapDirectories.map((directory) => {
+        // Extract the folder name from the directory's full path.
+        const folderName = path.basename(directory);
+
+        //console.log("Processing folder:", folderName); // debug
+
+        // Define the path to the settings.json file within this directory.
+        const settingsPath = path.join(directory, "settings.json");
+        let rawMap: Partial<MapEntity> = {};
+        try {
+          // Attempt to read and parse the settings.json file.
+          const rawConfig = fs.readFileSync(settingsPath, "utf-8");
+          rawMap = JSON.parse(rawConfig);
+        } catch (err) {
+          console.error("Error reading settings from", settingsPath, err);
+          rawMap = {};
+        }
+
+        // Default file names for map images.
+        const defaultMapImage = "mapImage.png";
+        const defaultFogProgress = "fogProgress.png";
+        const defaultFogLive = "fogLive.png";
+
+        // Helper function to check whether a default file exists in this directory.
+        const checkDefault = (defaultFile: string) => {
+          const filePath = path.join(directory, defaultFile);
+          return fs.existsSync(filePath) ? defaultFile : "";
+        };
+
+        // Build the MapEntity object.
+        const map: MapEntity = {
+          id: rawMap.id ?? folderName,
+          title: rawMap.title ?? folderName,
+          mapPath: rawMap.mapPath ?? checkDefault(defaultMapImage),
+          fogProgressPath:
+            rawMap.fogProgressPath ?? checkDefault(defaultFogProgress),
+          fogLivePath: rawMap.fogLivePath ?? checkDefault(defaultFogLive),
+          showGrid: rawMap.showGrid ?? false,
+          showGridToPlayers: rawMap.showGridToPlayers ?? false,
+          grid: (() => {
+            const gridInput =
+              typeof rawMap.grid === "string" ? rawMap.grid : null;
+            const gridColor =
+              "gridColor" in rawMap &&
+              typeof (rawMap as any).gridColor === "string"
+                ? (rawMap as any).gridColor
+                : null;
+            try {
+              return prepareGrid(gridInput, gridColor);
+            } catch (e) {
+              console.error("Error in prepareGrid for", folderName, e);
+              return null;
+            }
+          })(),
+          tokens:
+            "tokens" in rawMap && Array.isArray(rawMap.tokens)
+              ? rawMap.tokens
+                  .map((t) => {
+                    try {
+                      return prepareToken(t);
+                    } catch (e) {
+                      console.error("Error in prepareToken for", folderName, e);
+                      return null;
+                    }
+                  })
+                  .filter((t) => t !== null)
+              : [],
+          // Use availble fog or generate new UUIDs.
+          fogProgressRevision: rawMap.fogProgressRevision ?? randomUUID(),
+          fogLiveRevision: rawMap.fogLiveRevision ?? randomUUID(),
+        };
+
+        //console.log("Built MapEntity for", folderName, map); // debug
+        return map;
+      });
+
+      console.log("Reload complete. Maps:", this._maps);
+    } catch (err) {
+      console.error("Failed to reload maps:", err);
+      throw err;
+    }
+  }
+
   getBasePath(map: { id: string }) {
     return path.join(this._mapsDirectoryPath, map.id);
   }

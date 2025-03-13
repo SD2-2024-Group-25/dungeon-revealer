@@ -2,9 +2,9 @@ const express = require("express");
 const router = express.Router();
 const fs = require("fs");
 const path = require("path");
+const server = require("../server");
 
-router.post("/scenario", (req, res) => {
-  //API to upload scenario
+router.post("/scenario", async (req, res) => {
   const { files, parentFolder, folderName } = req.body;
   try {
     const basePath = path.resolve("./");
@@ -13,8 +13,7 @@ router.post("/scenario", (req, res) => {
       "data",
       parentFolder,
       folderName
-    ); //Defines the path
-
+    );
     fs.mkdirSync(destinationPath, { recursive: true });
 
     files.forEach((file) => {
@@ -22,6 +21,12 @@ router.post("/scenario", (req, res) => {
       const filePath = path.join(destinationPath, file.name);
       fs.writeFileSync(filePath, buffer);
     });
+
+    if (!server.maps) {
+      // Makes sure maps is initialized
+      throw new Error("Maps instance is not initialized.");
+    }
+    await server.maps.reload(); // Reload maps, basically re-reads the maps folder
 
     res.status(200).json({ message: "Files uploaded successfully!" });
   } catch (err) {
