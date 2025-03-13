@@ -729,14 +729,6 @@ const DownloadModal: React.FC<ModalProps> = ({
   );
 };
 
-//added 3/11: from here
-interface ViewModalProps {
-  show: boolean;
-  onClose: () => void;
-  sessionName: string;
-  onSessionSelect: (session: string) => void;
-}
-
 interface ViewModalProps {
   show: boolean;
   onClose: () => void;
@@ -901,6 +893,11 @@ const ViewModal: React.FC<ViewModalProps> = ({
             ) : (
               <p>Please select a session</p>
             )}
+            <img
+              src={`/api/iteration/${sessionName}/${selectedIteration}/map.jpg`}
+              alt="Map"
+              style={{ maxWidth: "100%", maxHeight: "100%" }}
+            />
           </div>
         </div>
         <button onClick={onClose} style={viewCloseButtonStyle}>
