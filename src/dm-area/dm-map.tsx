@@ -961,6 +961,7 @@ const viewModalOverlayStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
+  zIndex: 1001,
 };
 
 const viewModalStyle: React.CSSProperties = {
