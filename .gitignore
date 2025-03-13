@@ -30,6 +30,7 @@ data/settings.json
 public/research/downloads
 public/research/saved
 public/research/notes
+public/research/whiteboard
 
 # Packages #
 ############

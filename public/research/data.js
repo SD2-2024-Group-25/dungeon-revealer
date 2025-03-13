@@ -4,10 +4,12 @@ const { mkdir, copyFile, readdir, stat } = require("fs/promises");
 
 const basePath = path.resolve(__dirname, ".."); // Public path
 const settingsPath = path.join(basePath, "..", "data", "settings.json"); // settings of currentMapId
-const researchSettingsPath = path.join(basePath, "research", "settings.json"); // settings of recording
-const downloadsFolder = path.join(basePath, "research", "downloads");
-const savedFolder = path.join(basePath, "research", "saved");
-const notesFolder = path.join(basePath, "research", "notes");
+const researchPath = path.join(basePath, "research");
+const researchSettingsPath = path.join(researchPath, "settings.json"); // settings of recording
+const downloadsFolder = path.join(researchPath, "downloads");
+const savedFolder = path.join(researchPath, "saved");
+const notesFolder = path.join(researchPath, "notes");
+const whiteboardFolder = path.join(researchPath, "whiteboard");
 const sessionFolder = path.join(downloadsFolder, "session");
 
 let mapSettingsWatcher = null;
@@ -36,6 +38,7 @@ async function ensureFoldersExist() {
     await mkdir(downloadsFolder, { recursive: true });
     await mkdir(savedFolder, { recursive: true });
     await mkdir(notesFolder, { recursive: true });
+    await mkdir(whiteboardFolder, { recursive: true });
 
     // Ensure the session folder exists
     await mkdir(sessionFolder, { recursive: true });
@@ -45,14 +48,20 @@ async function ensureFoldersExist() {
 }
 
 async function handleMapSettingsChange(mapFolder) {
-  const iterationFolder = path.join(sessionFolder, `Iteration_${getTimestamp()}`);
+  const iterationFolder = path.join(
+    sessionFolder,
+    `Iteration_${getTimestamp()}`
+  );
 
   // Copy the folder contents
   await copyFolder(mapFolder, iterationFolder);
 
   // Update the iteration's settings.json `id` field
   const iterationSettingsPath = path.join(iterationFolder, "settings.json");
-  await updateIterationSettings(iterationSettingsPath, path.basename(iterationFolder));
+  await updateIterationSettings(
+    iterationSettingsPath,
+    path.basename(iterationFolder)
+  );
 }
 
 // Function to update the `id` field in the iteration's settings.json file
@@ -180,7 +189,9 @@ function watchMainSettingsFile() {
       }
       mainDebounceTimer = setTimeout(() => {
         try {
-          const mainSettings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+          const mainSettings = JSON.parse(
+            fs.readFileSync(settingsPath, "utf-8")
+          );
           const currentMapId = mainSettings.currentMapId;
 
           if (currentMapId !== previousMapId) {
@@ -210,9 +221,15 @@ function watchMainSettingsFile() {
     // Set initial state: currentMapId = null, recording = "stopped"
     const mainSettings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
     mainSettings.currentMapId = null;
-    fs.writeFileSync(settingsPath, JSON.stringify(mainSettings, null, 2), "utf-8");
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify(mainSettings, null, 2),
+      "utf-8"
+    );
 
-    const researchSettings = JSON.parse(fs.readFileSync(researchSettingsPath, "utf-8"));
+    const researchSettings = JSON.parse(
+      fs.readFileSync(researchSettingsPath, "utf-8")
+    );
     researchSettings.recording = "stopped";
     fs.writeFileSync(
       researchSettingsPath,
@@ -234,4 +251,3 @@ function watchMainSettingsFile() {
     console.error(`Error initializing script: ${err.message}`);
   }
 })();
-
