@@ -896,7 +896,11 @@ const ViewModal: React.FC<ViewModalProps> = ({
             <img
               src={`/api/iteration/${sessionName}/${selectedIteration}/map.jpg`}
               alt="Map"
-              style={{ maxWidth: "100%", maxHeight: "100%" }}
+              style={{
+                maxWidth: "100%",
+                height: "calc(100% - 40px)",
+                objectFit: "contain",
+              }}
             />
           </div>
         </div>
