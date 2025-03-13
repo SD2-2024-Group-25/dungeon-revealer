@@ -353,6 +353,11 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     const sourceSessionFolder = path.join(researchPath, "downloads", "session");
     const sourceNotesFolder = path.join(researchPath, "notes");
     const destinationNotesFolder = path.join(destinationFolder, "notes");
+    const sourceWhiteboardFolder = path.join(researchPath, "whiteboard");
+    const destinationWhiteboardFolder = path.join(
+      destinationFolder,
+      "whiteboard"
+    );
 
     try {
       if (!fs.existsSync(sourceSessionFolder)) {
@@ -367,14 +372,12 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
       createSessionCSV(sourceSessionFolder, destinationFolder);
 
-      if (fs.existsSync(sourceNotesFolder)) {
-        copyFolderRecursive(sourceNotesFolder, destinationNotesFolder);
-      } else {
-        console.warn("Notes folder does not exist, skipping copy.");
-      }
+      copyFolderRecursive(sourceNotesFolder, destinationNotesFolder);
+      copyFolderRecursive(sourceNotesFolder, destinationWhiteboardFolder);
 
       deleteFolderContents(sourceSessionFolder);
       deleteFolderContents(sourceNotesFolder);
+      deleteFolderContents(sourceWhiteboardFolder);
 
       console.log(`Session saved: ${finalFolderName}`);
       res
