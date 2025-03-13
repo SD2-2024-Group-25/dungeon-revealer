@@ -865,12 +865,11 @@ const ViewModal: React.FC<ViewModalProps> = ({
                 <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                   {iterations.map((iteration) => (
                     <li key={iteration} style={sessionItemStyle}>
-                      <span style={{ flexGrow: 1 }}>{iteration}</span>
                       <button
                         style={smallButtonStyle}
                         onClick={() => setSelectedIteration(iteration)}
                       >
-                        View Map
+                        {iteration}
                       </button>
                     </li>
                   ))}
@@ -980,6 +979,7 @@ const viewModalOverlayStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
+  zIndex: 1001,
 };
 
 const viewModalStyle: React.CSSProperties = {
