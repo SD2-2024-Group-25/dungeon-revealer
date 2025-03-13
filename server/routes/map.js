@@ -32,6 +32,8 @@ const mapMap = (map) => {
   };
 };
 
+const { getMapsFromDisk } = require("../maphelper");
+
 module.exports = ({ roleMiddleware, maps, settings, emitter }) => {
   const router = express.Router();
 
@@ -191,14 +193,29 @@ module.exports = ({ roleMiddleware, maps, settings, emitter }) => {
     });
   });
 
-  router.get("/map", roleMiddleware.pc, (req, res) => {
-    res.json({
-      error: null,
-      data: {
-        currentMapId: settings.get("currentMapId"),
-        maps: maps.getAll().map(mapMap),
-      },
-    });
+  router.get("/map", roleMiddleware.pc, async (req, res) => {
+    try {
+      const mapsFromDisk = await getMapsFromDisk();
+      // Map each folder name to an object with id and title.
+      const mapsList = mapsFromDisk.map((folderName) => ({
+        id: folderName,
+        title: folderName,
+      }));
+      res.json({
+        // Gets the current map id from settings and returns it along with the list of maps
+        error: null,
+        data: {
+          currentMapId: settings.get("currentMapId"),
+          maps: mapsList,
+        },
+      });
+    } catch (err) {
+      console.error("Error in GET /map:", err);
+      res.status(500).json({
+        error: "Failed to read maps folder from disk",
+        data: null,
+      });
+    }
   });
 
   router.get("/map/:id", roleMiddleware.dm, async (req, res) => {

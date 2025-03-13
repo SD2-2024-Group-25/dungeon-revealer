@@ -7,7 +7,8 @@ import type { MapEntity, MapGridEntity, Maps } from "./maps";
 import * as auth from "./auth";
 import type { Settings } from "./settings";
 import { invalidateResourcesRT } from "./live-query-store";
-
+import { getMapsFromDisk } from "./maphelper";
+import { ReaderTask } from "fp-ts/lib/ReaderTask";
 type MapsDependency = {
   maps: Maps;
 };
@@ -84,45 +85,103 @@ export const addManyMapToken = (params: {
     RT.map(() => null)
   );
 
-export const getPaginatedMaps = (params: {
-  /* amount of items to fetch */
-  first: number;
-  /* cursor which can be used to fetch more. */
-  cursor: null | {
-    /* createdAt date of the item after which items should be fetched */
-    lastCreatedAt: number;
-    /* id of the item after which items should be fetched */
-    lastId: string;
+async function readSettingsFile( //This reads the settings file collecting specific data for mapEntity
+  folderPath: string
+): Promise<Partial<
+  Pick<
+    MapEntity,
+    "id" | "title" | "tokens" | "fogProgressRevision" | "fogLiveRevision"
+  >
+> | null> {
+  const settingsFilePath = path.join(folderPath, "settings.json");
+  try {
+    const content = await fs.readFile(settingsFilePath, "utf8");
+    return JSON.parse(content);
+  } catch (error) {
+    console.error(`Error reading settings.json in ${folderPath}:`, error);
+    return null;
+  }
+}
+
+export async function createMapEntityFromFolder( // This places data from settings into a MapEntity
+  folderName: string
+): Promise<MapEntity> {
+  const baseMapsPath = path.join(process.cwd(), "data", "maps");
+  const folderPath = path.join(baseMapsPath, folderName);
+
+  // Read settings.json from that folder
+  const settingsData = await readSettingsFile(folderPath);
+
+  // Use values from settings or default values
+  const id = settingsData?.id ?? folderName;
+  const title = settingsData?.title ?? folderName;
+
+  // Use the tokens array from settings or default
+  const tokens = Array.isArray(settingsData?.tokens)
+    ? settingsData!.tokens
+    : [];
+
+  // Use the ones from settings or generate new ones
+  const fogProgressRevision = settingsData?.fogProgressRevision ?? randomUUID();
+  const fogLiveRevision = settingsData?.fogLiveRevision ?? randomUUID();
+
+  // Return a MapEntity object with default file paths and other properties
+  return {
+    id,
+    title,
+    mapPath: `mapImage.png`,
+    fogProgressPath: `fogProgress.png`,
+    fogLivePath: `fogLive.png`,
+    showGrid: false,
+    showGridToPlayers: false,
+    grid: null,
+    tokens,
+    fogProgressRevision,
+    fogLiveRevision,
   };
-  /**
-   * filter maps via title
-   * TODO: should this be part of the cursor?
-   * */
+}
+
+export const getPaginatedMaps = (params: {
+  first: number;
+  cursor: null | { lastCreatedAt: number; lastId: string };
   titleNeedle: string | null;
-}) =>
+}): ReaderTask<MapsDependency, MapEntity[]> =>
   pipe(
-    auth.requireAdmin(),
-    RT.chainW(() => RT.ask<MapsDependency>()),
-    RT.chainW((deps) => () => async () => {
-      let allMaps = deps.maps.getAll();
-      if (params.titleNeedle) {
-        const titleNeedle = params.titleNeedle.toLowerCase();
-        allMaps = allMaps.filter((map) =>
-          map.title.toLowerCase().includes(titleNeedle)
+    RT.ask<MapsDependency>(),
+    RT.chainW((deps) =>
+      RT.fromTask(async () => {
+        // Read the maps folder dynamically.
+        const folderNames = await getMapsFromDisk();
+
+        const validFolderNames = folderNames.filter(
+          (folder): folder is string => folder !== null
         );
-      }
-      let index = -1;
-
-      if (params.cursor) {
-        const lastId = params.cursor.lastId;
-        index = allMaps.findIndex((map) => map.id === lastId);
-      }
-
-      index = index + 1;
-
-      const batch = allMaps.slice(index, index + params.first);
-      return batch;
-    })
+        // Map each folder into a MapEntity using maphelper.js
+        let allMaps: MapEntity[] = await Promise.all(
+          validFolderNames.map((folderName) =>
+            createMapEntityFromFolder(folderName)
+          )
+        );
+        // Filter by titleNeedle if provided.
+        if (params.titleNeedle) {
+          const needle = params.titleNeedle.toLowerCase();
+          allMaps = allMaps.filter((map) =>
+            (map.title ?? "").toLowerCase().includes(needle)
+          );
+        }
+        // Determine the pagination index.
+        let index = 0;
+        if (params.cursor !== null) {
+          const foundIndex = allMaps.findIndex(
+            (map) => map.id === params.cursor!.lastId
+          );
+          index = foundIndex >= 0 ? foundIndex + 1 : 0;
+        }
+        // Paginate and return the batch of maps
+        const batch = allMaps.slice(index, index + params.first);
+        return batch;
+      })
+    )
   );
 
 type MapImageUploadRegisterRecord = {

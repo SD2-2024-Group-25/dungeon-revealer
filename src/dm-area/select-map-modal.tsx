@@ -1,7 +1,7 @@
 import * as React from "react";
 import graphql from "babel-plugin-relay/macro";
 import { useFragment, useMutation, usePagination, useQuery } from "relay-hooks";
-import { ConnectionHandler } from "relay-runtime";
+import { ConnectionHandler, Environment } from "relay-runtime";
 import { Modal, ModalDialogSize } from "../modal";
 import * as Icon from "../feather-icons";
 import { Input, InputGroup } from "../input";
@@ -20,9 +20,7 @@ import { selectMapModal_ActiveMap_MapFragment$key } from "./__generated__/select
 import { selectMapModal_ActiveMapQuery } from "./__generated__/selectMapModal_ActiveMapQuery.graphql";
 
 import { useSelectFolderDialog } from "../hooks/use-select-folder-dialog"; // This is for "folder" selection, but just prompts 4 files (1 json, 3 png)
-
-const DEFAULT_MAPS_DIR = "../data/defaultmaps";
-const MAPS_DIR = "../data/maps";
+import { useRelayEnvironment } from "relay-hooks";
 
 // deleteScenario function to call API and delete a selected map
 const deleteScenario = async (folderName: string): Promise<void> => {
@@ -47,8 +45,7 @@ const deleteScenario = async (folderName: string): Promise<void> => {
 const uploadScenario = async (
   files: File[],
   parentFolder: string,
-  folderName: string,
-  onSuccess?: () => void //Testing for maplist refresh
+  folderName: string
 ): Promise<void> => {
   const formattedFiles = await Promise.all(
     files.map(async (file) => ({
@@ -65,7 +62,6 @@ const uploadScenario = async (
 
   if (response.ok) {
     console.log("Successfully uploaded scenario.");
-    onSuccess?.(); //Testing for maplist refresh
   } else {
     console.error("Error uploading scenario.");
   }
@@ -322,9 +318,7 @@ const MapList = (props: {
     loadNext(20);
   });
 
-  //React.useEffect(() => props.reportMapsConnectionId(data.maps.__id));
   React.useEffect(() => {
-    console.log("Reporting maps connection ID:", data.maps.__id);
     props.reportMapsConnectionId(data.maps.__id);
   }, [data.maps.__id, props.reportMapsConnectionId]);
 
@@ -468,16 +462,6 @@ export const SelectMapModal = ({
   const [modalState, setModalState] = React.useState<ModalStates | null>(null);
   const [filter, setFilterValue] = React.useState("");
 
-  /*
-  const refreshMapList = React.useCallback(() => {
-    RelayEnvironment.current.fetchQuery(
-      SelectMapModal_MapsQuery,
-      { titleNeedle: filter },
-      { force: true } // Forces a fresh fetch from the server
-    );
-  }, [filter]);
-  */
-
   const response = useQuery<selectMapModal_MapsQuery>(
     SelectMapModal_MapsQuery,
     React.useMemo(
@@ -519,8 +503,6 @@ export const SelectMapModal = ({
     [setFilterValue]
   );
 
-  //const [mapListKey, setMapListKey] = React.useState(0); Test for manual refresh of maplist (not working)
-
   // TODO: find a better way of propagating the inner relay id to his level :)
   const mapsConnectionIdRef = React.useRef("");
 
@@ -528,11 +510,6 @@ export const SelectMapModal = ({
     setModalState({ type: ModalType.CREATE_MAP, data: { file } });
   }, []);
 
-  /*
-  const beforeCreateScenario = React.useCallback((file) => {
-    setModalState({ type: ModalType.CREATE_SCENARIO, data: { file } });
-  }, []);
-  */
   const closeIfPossible = React.useCallback(() => {
     if (!canClose) {
       return;
@@ -613,7 +590,6 @@ export const SelectMapModal = ({
                   }}
                 />
               ) : null}
-
               <Modal.Footer>
                 <CreateNewMapButton
                   tabIndex={1}
@@ -634,16 +610,6 @@ export const SelectMapModal = ({
                   onUploadScenario={(files, folderName) => {
                     uploadScenario(files, "maps", folderName);
                   }}
-
-                  /*
-                  onUploadScenario={(files, folderName) => { //Testing for maplist refresh
-                    console.log("Uploading scenario with files:", files, "to folder:", folderName);
-                    uploadScenario(files, "maps", folderName, () => {
-                      console.log("Scenario uploaded, triggering MapList update...");
-                      //refreshMapList(); // Reloads the query
-                    });
-                  }}       
-                    */
                 >
                   <>
                     <Icon.Plus boxSize="20px" />{" "}
@@ -715,6 +681,7 @@ export const SelectMapModal = ({
             }}
             file={modalState.data.file}
             createMap={async (title) => {
+              //
               const hash = await generateSHA256FileHash(modalState.data.file);
               // 1. request file upload
               const result = await mapImageRequestUpload({
@@ -808,7 +775,7 @@ export const SelectScenarioModal = ({
 
   //Fetch scenarios from the "defaultmaps" directory (used for list)
   React.useEffect(() => {
-    fetch("/api/fetch/maps")
+    fetch("/api/fetch_default/defaultmaps")
       .then((res) => res.json())
       .then((data) => setScenarios(data))
       .catch((err) => console.error("Error fetching scenarios:", err));

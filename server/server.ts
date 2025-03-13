@@ -25,9 +25,12 @@ import type {
   Request,
 } from "express-serve-static-core";
 
+let maps: Maps | null = null;
+
 const uploadRoutes = require("./routes/upload"); //Defines the route for api upload
 const copyRoutes = require("./routes/copy"); //Defines the route for api copy
-const fetchdefaultRoutes = require("./routes/fetch"); //Defines the route for api fetchdefault
+const fetchMapRoutes = require("./routes/fetch_maps"); //Defines the route for api fetchdefault
+const fetchdefaultRoutes = require("./routes/fetch_default"); //Defines the route for api fetchdefault
 const deleteRoutes = require("./routes/delete"); //Defines the route for api delete
 const { parse } = require("json2csv");
 import archiver from "archiver";
@@ -52,7 +55,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
   const processTask = createResourceTaskProcessor();
 
-  const maps = new Maps({ processTask, dataDirectory: env.DATA_DIRECTORY });
+  maps = new Maps({ processTask, dataDirectory: env.DATA_DIRECTORY });
   const settings = new Settings({ dataDirectory: env.DATA_DIRECTORY });
   const researchPath = path.join(__dirname, "..", "public", "research");
   const notes_folder = path.join(researchPath, "notes");
@@ -60,7 +63,6 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     dataDirectory: env.DATA_DIRECTORY,
     db,
   });
-
   app.use(busboy());
 
   // Not sure if this is needed, Chrome seems to grab the favicon just fine anyway
@@ -157,12 +159,22 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
   apiRouter.use("/upload", uploadRoutes); //api call for upload
   apiRouter.use("/copy", copyRoutes); //api call for copy
-  apiRouter.use("/fetch", fetchdefaultRoutes); //api call for fetchdefault
+  apiRouter.use("/fetch_default", fetchdefaultRoutes); //api call for fetch_default
+  apiRouter.use("/fetch_maps", fetchMapRoutes); //api call for fetch_maps
   apiRouter.use("/delete", deleteRoutes); //api call for delete
 
   apiRouter.get("/active-map", requiresPcRole, (req, res) => {
     let activeMap = null;
     const activeMapId = settings.get("currentMapId");
+
+    // Check if maps is initialized. Fixes an issue with exporting maps
+    if (!maps) {
+      console.error("Maps instance is not initialized");
+      return res
+        .status(500)
+        .json({ error: "Maps instance is not initialized" });
+    }
+
     if (activeMapId) {
       activeMap = maps.get(activeMapId);
     }
@@ -677,3 +689,5 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
   return { app, httpServer, io };
 };
+
+export { maps };
