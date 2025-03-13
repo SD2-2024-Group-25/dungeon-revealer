@@ -260,6 +260,30 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
+  apiRouter.get(
+    "/iteration/:sessionName/:iterationName/map.jpg",
+    async (req, res) => {
+      const { sessionName, iterationName } = req.params;
+
+      const mapFilePath = path.join(
+        researchPath,
+        "saved",
+        sessionName,
+        iterationName,
+        "map.jpg"
+      );
+
+      console.log("Serving map.jpg from:", mapFilePath); // Log the file path
+
+      if (!fs.existsSync(mapFilePath)) {
+        console.error("File not found:", mapFilePath);
+        return res.status(404).json({ error: "map.jpg not found" });
+      }
+
+      res.sendFile(mapFilePath);
+    }
+  );
+
   app.post("/api/recording", (req, res) => {
     const filePath = path.join(researchPath, "settings.json");
 
