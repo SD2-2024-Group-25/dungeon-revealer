@@ -19,4 +19,21 @@ async function getMapsFromDisk() {
   }
 }
 
-module.exports = { getMapsFromDisk };
+function getExistingMapImage(directory) {
+  const possibleFiles = [
+    "mapImage.png",
+    "mapImage.jpg",
+    "mapImage.jpeg",
+    "mapImage.svg",
+  ];
+
+  for (const fileName of possibleFiles) {
+    const filePath = path.join(directory, fileName);
+    if (fs.existsSync(filePath)) {
+      return fileName;
+    }
+  }
+  return "";
+}
+
+module.exports = { getMapsFromDisk, getExistingMapImage };

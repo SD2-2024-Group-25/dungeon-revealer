@@ -2,6 +2,7 @@ import path from "path";
 import fs from "fs-extra";
 import junk from "junk";
 import { randomUUID } from "crypto";
+import { getExistingMapImage } from "./maphelper";
 
 const isDirectory = (source: string) => fs.lstatSync(source).isDirectory();
 
@@ -214,7 +215,6 @@ export class Maps {
         }
 
         // Default file names for map images.
-        const defaultMapImage = "mapImage.png";
         const defaultFogProgress = "fogProgress.png";
         const defaultFogLive = "fogLive.png";
 
@@ -224,11 +224,13 @@ export class Maps {
           return fs.existsSync(filePath) ? defaultFile : "";
         };
 
+        const mapImageFile = rawMap.mapPath ?? getExistingMapImage(directory);
+
         // Build the MapEntity object.
         const map: MapEntity = {
           id: rawMap.id ?? folderName,
           title: rawMap.title ?? folderName,
-          mapPath: rawMap.mapPath ?? checkDefault(defaultMapImage),
+          mapPath: mapImageFile,
           fogProgressPath:
             rawMap.fogProgressPath ?? checkDefault(defaultFogProgress),
           fogLivePath: rawMap.fogLivePath ?? checkDefault(defaultFogLive),

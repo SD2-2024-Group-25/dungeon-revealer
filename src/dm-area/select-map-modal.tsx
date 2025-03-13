@@ -777,7 +777,6 @@ export const SelectScenarioModal = ({
     null
   );
   const [showNamingModal, setShowNamingModal] = React.useState(false);
-
   const close = React.useCallback(() => {
     closeModal();
   }, [closeModal]);
@@ -858,6 +857,25 @@ export const SelectScenarioModal = ({
                 <p>No scenarios found.</p>
               )}
             </Modal.Aside>
+            {selectedScenario && (
+              <div
+                style={{
+                  flex: 1,
+                  padding: "1rem",
+                  borderLeft: "1px solid #ddd",
+                }}
+              >
+                <h3 style={{ margin: "0 0 1rem 0" }}></h3>
+                <img
+                  src={`/api/default_Preview/mapImage?sourceFolder=${selectedScenario}`}
+                  style={{
+                    width: "100%",
+                    maxHeight: "100%",
+                    overflowY: "scroll",
+                  }}
+                />
+              </div>
+            )}
           </Modal.Body>
 
           <Modal.Footer

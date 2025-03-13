@@ -32,6 +32,7 @@ const copyRoutes = require("./routes/copy"); //Defines the route for api copy
 const fetchMapRoutes = require("./routes/fetch_maps"); //Defines the route for api fetchdefault
 const fetchdefaultRoutes = require("./routes/fetch_default"); //Defines the route for api fetchdefault
 const deleteRoutes = require("./routes/delete"); //Defines the route for api delete
+const previewRoutes = require("./routes/default_Preview"); //Defines the route for api default_Preview
 //const { parse } = require("json2csv");
 import archiver from "archiver";
 
@@ -162,6 +163,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   apiRouter.use("/fetch_default", fetchdefaultRoutes); //api call for fetch_default
   apiRouter.use("/fetch_maps", fetchMapRoutes); //api call for fetch_maps
   apiRouter.use("/delete", deleteRoutes); //api call for delete
+  apiRouter.use("/default_Preview", previewRoutes); //api call for default_Preview
 
   apiRouter.get("/active-map", requiresPcRole, (req, res) => {
     let activeMap = null;
