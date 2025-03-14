@@ -68,6 +68,7 @@
     "junk": "3.1.0",
     "liquidjs": "9.30.0",
     "lodash": "4.17.21",
+    "mitt": "^3.0.1",
     "morgan": "1.10.0",
     "sanitize-html": "2.5.2",
     "serve-favicon": "2.5.0",

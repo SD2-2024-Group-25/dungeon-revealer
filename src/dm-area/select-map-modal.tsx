@@ -20,7 +20,8 @@ import { selectMapModal_ActiveMap_MapFragment$key } from "./__generated__/select
 import { selectMapModal_ActiveMapQuery } from "./__generated__/selectMapModal_ActiveMapQuery.graphql";
 
 import { useSelectFolderDialog } from "../hooks/use-select-folder-dialog"; // This is for "folder" selection, but just prompts 4 files (1 json, 3 png)
-import { createContext, useContext, useState } from "react";
+import mitt from "mitt"; // Used to close all modals
+const emitter = mitt();
 
 // deleteScenario function to call API and delete a selected map
 const deleteScenario = async (folderName: string): Promise<void> => {
@@ -521,6 +522,17 @@ export const SelectMapModal = ({
     closeModal();
   }, [closeModal]);
 
+  React.useEffect(() => {
+    // Close modal remotely
+    const handleClose = () => {
+      closeModal();
+    };
+    emitter.on("closeSelectMapModal", handleClose);
+    return () => {
+      emitter.off("closeSelectMapModal", handleClose);
+    };
+  }, [closeModal]);
+
   return (
     <>
       <Modal onClickOutside={closeIfPossible} onPressEscape={closeIfPossible}>
@@ -951,6 +963,7 @@ export const SelectScenarioModal = ({
           onSubmit={(newScenarioName) => {
             onCreateScenario(selectedScenario, newScenarioName);
             setShowNamingModal(false);
+            emitter.emit("closeSelectMapModal");
             close();
           }}
         />
