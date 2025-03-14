@@ -56,7 +56,7 @@ export const useSelectFolderDialog = (
       <input
         type="file"
         multiple
-        accept=".json,.png,.jpg,.gif,.jpeg,.webp,.svg"
+        accept=".json,.png,.jpg,.jpeg,.svg"
         ref={ref}
         onChange={onChange}
         style={{ display: "none" }}

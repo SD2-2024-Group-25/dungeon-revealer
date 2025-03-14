@@ -7,7 +7,7 @@ import type { MapEntity, MapGridEntity, Maps } from "./maps";
 import * as auth from "./auth";
 import type { Settings } from "./settings";
 import { invalidateResourcesRT } from "./live-query-store";
-import { getMapsFromDisk } from "./maphelper";
+import { getMapsFromDisk, getExistingMapImage } from "./maphelper";
 import { ReaderTask } from "fp-ts/lib/ReaderTask";
 type MapsDependency = {
   maps: Maps;
@@ -90,7 +90,12 @@ async function readSettingsFile( //This reads the settings file collecting speci
 ): Promise<Partial<
   Pick<
     MapEntity,
-    "id" | "title" | "tokens" | "fogProgressRevision" | "fogLiveRevision"
+    | "id"
+    | "title"
+    | "mapPath"
+    | "tokens"
+    | "fogProgressRevision"
+    | "fogLiveRevision"
   >
 > | null> {
   const settingsFilePath = path.join(folderPath, "settings.json");
@@ -125,11 +130,14 @@ export async function createMapEntityFromFolder( // This places data from settin
   const fogProgressRevision = settingsData?.fogProgressRevision ?? randomUUID();
   const fogLiveRevision = settingsData?.fogLiveRevision ?? randomUUID();
 
+  const mapPath =
+    settingsData?.mapPath || getExistingMapImage(folderPath) || "";
+
   // Return a MapEntity object with default file paths and other properties
   return {
     id,
     title,
-    mapPath: `mapImage.png`,
+    mapPath,
     fogProgressPath: `fogProgress.png`,
     fogLivePath: `fogLive.png`,
     showGrid: false,
