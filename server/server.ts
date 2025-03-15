@@ -237,6 +237,57 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
+  //just added
+  apiRouter.get("/list-iterations/:folder", async (req, res) => {
+    const folderName = req.params.folder; // Dynamically get folder name
+    const targetFolderPath = path.join(researchPath, "saved", folderName);
+
+    try {
+      if (!fs.existsSync(targetFolderPath)) {
+        return res
+          .status(404)
+          .json({ error: `Folder "${folderName}" not found` });
+      }
+
+      const files = await fs.readdir(targetFolderPath);
+      const iterationFolders = files.filter((file) =>
+        fs.statSync(path.join(targetFolderPath, file)).isDirectory()
+      );
+
+      if (iterationFolders.length === 0) {
+        return res.status(404).json({ error: "No sessions found" });
+      }
+
+      res.json({ iterations: iterationFolders });
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to list iterations" });
+    }
+  });
+
+  apiRouter.get(
+    "/iteration/:sessionName/:iterationName/map.jpg",
+    async (req, res) => {
+      const { sessionName, iterationName } = req.params;
+
+      const mapFilePath = path.join(
+        researchPath,
+        "saved",
+        sessionName,
+        iterationName,
+        "map.jpg"
+      );
+
+      console.log("Serving map.jpg from:", mapFilePath); // Log the file path
+
+      if (!fs.existsSync(mapFilePath)) {
+        console.error("File not found:", mapFilePath);
+        return res.status(404).json({ error: "map.jpg not found" });
+      }
+
+      res.sendFile(mapFilePath);
+    }
+  );
+
   app.post("/api/recording", (req, res) => {
     const filePath = path.join(researchPath, "settings.json");
 
