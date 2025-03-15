@@ -741,6 +741,24 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
     } catch (err) {
       console.error("Error saving session:", err);
     }
+    /*
+    try{
+
+      const response = await fetch('/api/visualize/graph', {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionName }),
+      });
+
+      if(response.ok){
+        console.log("Session Graphed successfully.");
+      } else {
+        console.error("Failed to graph session.");
+      }
+    } catch(err) {
+      console.error("Error graphing session:", err);
+    }
+      */
   };
 
   if (!show) return null;
