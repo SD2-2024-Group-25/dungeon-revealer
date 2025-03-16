@@ -753,9 +753,11 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const [error, setError] = React.useState<string | null>(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState<boolean>(true);
-  const [isMoveMentModalOpen, setIsMoveMentModalOpen] =
+  const [isMovementModalOpen, setIsMovementModalOpen] =
     React.useState<boolean>(false);
   const [showMovementModal, setShowMovementModal] = React.useState(false);
+  const [isHerdModalOpen, setIsHerdModalOpen] = React.useState<boolean>(false);
+  const [showHerdModal, setShowHerdModal] = React.useState(false);
 
   // Fetch sessions if modal is shown and no session is selected
   React.useEffect(() => {
@@ -814,11 +816,29 @@ const ViewModal: React.FC<ViewModalProps> = ({
           onClick={() => setShowMovementModal(true)}
           style={{
             position: "absolute",
-            left: "1400px",
+            left: "85%",
+            top: "10px",
             cursor: "pointer",
+            border: "2px solid #ccc",
+            padding: "5px",
           }}
         >
-          {isMoveMentModalOpen ? "Open Movement Graph" : "Open Movement Graph"}
+          {isMovementModalOpen ? "Open Movement Graph" : "Open Movement Graph"}
+        </button>
+
+        {/* Button that opens herd graph */}
+        <button
+          onClick={() => setShowHerdModal(true)}
+          style={{
+            position: "absolute",
+            left: "85%",
+            top: "50px",
+            cursor: "pointer",
+            border: "2px solid #ccc",
+            padding: "5px",
+          }}
+        >
+          {isHerdModalOpen ? "Open Herd Graph" : "Open Herd Graph"}
         </button>
 
         {/* A button to toggle the sidebar */}
@@ -956,34 +976,33 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
     width: number;
     height: number;
   } | null>(null);
-  // Fetch aggregated visualization data when the modal is shown.
+  const [currentIteration, setCurrentIteration] = React.useState<number>(1);
+
+  // Grab the token data from all iterations
   React.useEffect(() => {
     if (show && sessionName) {
       const fetchVisualizationData = async () => {
-        // Gets all the token data
         try {
           const response = await fetch(`/api/grabIterationData/visualData`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ sessionName }),
           });
-          if (response.ok) {
-            console.log("Fetched vis data");
-          } else {
-            console.log("Failed to fetch visualization data");
+          if (!response.ok) {
+            throw new Error("Failed to fetch visualization data");
           }
           const json = await response.json();
           setTokenData(json.data);
         } catch (error) {
-          console.error("Error fetching vis data:", error);
+          console.error("Error fetching visualization data:", error);
         }
       };
       fetchVisualizationData();
     }
   }, [show, sessionName]);
 
+  // Grab the background image
   React.useEffect(() => {
-    // Gets the map of the session
     if (show && sessionName) {
       const fetchImage = async () => {
         try {
@@ -992,23 +1011,21 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
               sessionName
             )}`
           );
-          if (response.ok) {
-            console.log("Fetched back image");
-          } else {
-            console.log("Failed to fetch back image");
+          if (!response.ok) {
+            throw new Error("Failed to fetch background image");
           }
           const json = await response.json();
           setBackgroundImage(json.url);
         } catch (error) {
-          console.error("Error fetching back image:", error);
+          console.error("Error fetching background image:", error);
         }
       };
       fetchImage();
     }
   }, [show, sessionName]);
 
+  // Manipulate the image dimensions to align with tokens
   React.useEffect(() => {
-    // Gets the size of the map image, to align with token locations (same as DR map)
     if (!backgroundImage) return;
     const img = new Image();
     img.src = backgroundImage;
@@ -1020,10 +1037,9 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
     };
   }, [backgroundImage]);
 
-  // Makes the graph
+  // Create the graph
   React.useEffect(() => {
     if (
-      // Fixes null errors
       !show ||
       !tokenData ||
       Object.keys(tokenData).length === 0 ||
@@ -1040,10 +1056,9 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
     const width = svgWidth - margin.left - margin.right;
     const height = svgHeight - margin.top - margin.bottom;
 
-    // Clears old svg
     d3.select(svgRef.current).select("svg").remove();
 
-    // Create SVG element
+    // Make SVG element
     const svg = d3
       .select(svgRef.current)
       .append("svg")
@@ -1053,7 +1068,7 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
       .append("g")
       .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
-    // Create scales that align with image dimensions
+    // The scale of graph uses image dimensions
     const xScale = d3
       .scaleLinear()
       .domain([0, bgDimensions.width])
@@ -1063,7 +1078,7 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
       .domain([0, bgDimensions.height])
       .range([0, height]);
 
-    // Create background image SVG element
+    // image
     svg
       .append("image")
       .attr("xlink:href", backgroundImage)
@@ -1074,7 +1089,7 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
       .attr("preserveAspectRatio", "xMidYMid slice")
       .attr("opacity", 0.7);
 
-    // Create gridlines for graph at 100 intervals
+    // Create gridlines using ticks at every 100 intervals (relative to image dimensions)
     const xTickInterval = 100;
     const yTickInterval = 100;
     const xTicks = d3.range(0, bgDimensions.width + 1, xTickInterval);
@@ -1105,28 +1120,28 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
     svg.append("g").attr("transform", `translate(0, ${height})`).call(xAxis);
     svg.append("g").call(yAxis);
 
-    // Put the tokens on
+    // Draw the token movements, based on currentIteration
     Object.values(tokenData).forEach((token: any) => {
-      const points = token.movements;
-      if (!points || points.length === 0) return;
+      const visiblePoints = token.movements.slice(0, currentIteration);
+      if (!visiblePoints || visiblePoints.length === 0) return;
 
       const lineGenerator = d3
         .line()
         .x((d: any) => xScale(+d.x))
-        .y((d: any) => yScale(+d.y))
-        .curve(d3.curveMonotoneX);
+        .y((d: any) => yScale(+d.y));
+      //.curve(d3.curveMonotoneX); //To curve the lines
 
-      // Movement lines
       svg
         .append("path")
-        .datum(points)
+        .datum(visiblePoints)
         .attr("d", lineGenerator)
         .attr("stroke", token.color)
         .attr("fill", "none")
         .attr("stroke-width", 2);
+
       svg
         .selectAll(`.token-${token.id}`)
-        .data(points)
+        .data(visiblePoints)
         .enter()
         .append("circle")
         .attr("cx", (d: any) => xScale(+d.x))
@@ -1135,7 +1150,7 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
         .attr("fill", token.color);
     });
 
-    // Create a legend in the top-left
+    // Creates a legend in top-left
     const legend = svg.append("g").attr("transform", "translate(10,10)");
     Object.values(tokenData).forEach((token: any, i: number) => {
       legend
@@ -1152,7 +1167,7 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
         .text(token.label)
         .attr("font-size", "12px");
     });
-  }, [show, tokenData, backgroundImage, bgDimensions]);
+  }, [show, tokenData, backgroundImage, bgDimensions, currentIteration]);
 
   if (!show) return null;
 
@@ -1167,10 +1182,60 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
           }}
         >
           <h2>Movement Graph for {sessionName}</h2>
-          <button onClick={onClose}>Close</button>
+          <div>
+            <button onClick={onClose}>Close</button>
+            <div
+              style={{
+                position: "absolute",
+                top: 10,
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                gap: "10px",
+              }}
+            >
+              <button
+                onClick={() =>
+                  setCurrentIteration((prev) => Math.max(prev - 1, 1))
+                }
+                style={{
+                  marginRight: "5px",
+                  border: "2px solid #ccc",
+                  padding: "3px",
+                }}
+              >
+                Prev
+              </button>
+              <span style={{ fontSize: "14px", fontWeight: "bold" }}>
+                Iteration: {currentIteration}
+              </span>
+              <button
+                onClick={() => setCurrentIteration((prev) => prev + 1)}
+                style={{
+                  marginLeft: "5px",
+                  border: "2px solid #ccc",
+                  padding: "3px",
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
         <div ref={svgRef} style={{ width: "800px", height: "800px" }} />
       </div>
+    </div>
+  );
+};
+
+const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
+  show,
+  onClose,
+  sessionName,
+}) => {
+  return (
+    <div style={movementModalOverlayStyle}>
+      <div style={movementModalStyle}></div>
     </div>
   );
 };
