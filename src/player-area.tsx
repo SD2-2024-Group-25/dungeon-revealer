@@ -181,6 +181,59 @@ const PlayerMap = ({
   const controlRef = React.useRef<MapControlInterface | null>(null);
   const [markedAreas, setMarkedAreas] = React.useState<MarkedArea[]>(() => []);
 
+  const [isMeasuring, setIsMeasuring] = React.useState(false);
+  const [measurementPoints, setMeasurementPoints] = React.useState<
+    { x: number; y: number }[]
+  >([]);
+  const [measuredDistance, setMeasuredDistance] = React.useState<number | null>(
+    null
+  );
+
+  const handleMeasureClick = (x: number, y: number) => {
+    if (!isMeasuring) return; // Only process clicks if measuring mode is active
+
+    console.log("Raw Click:", measurementPoints);
+    console.log("Map Offset:", mapOffset);
+
+    console.log(`handleMeasureClick called with (${x}, ${y})`);
+
+    if (measurementPoints.length === 0) {
+      // Store first point
+      setMeasurementPoints([{ x, y }]);
+    } else if (measurementPoints.length === 1) {
+      // Store second point and calculate distance
+      const p1 = measurementPoints[0];
+      const p2 = { x, y };
+      const distance = Math.sqrt(
+        Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)
+      );
+
+      console.log("Adjusted Coordinates:", {
+        x1: measurementPoints[0].x - mapOffset.left,
+        y1: measurementPoints[0].y - mapOffset.top,
+        x2: measurementPoints[1].x - mapOffset.left,
+        y2: measurementPoints[1].y - mapOffset.top,
+      });
+
+      setMeasurementPoints([...measurementPoints, p2]);
+      setMeasuredDistance(distance);
+      console.log(distance);
+    } else {
+      console.log("Resetting measurement");
+      // Reset measurement
+      setMeasurementPoints([{ x, y }]);
+      setMeasuredDistance(null);
+    }
+  };
+
+  React.useEffect(() => {
+    if (!isMeasuring) {
+      console.log("Measuring mode OFF - Clearing measurements");
+      setMeasurementPoints([]);
+      setMeasuredDistance(null);
+    }
+  }, [isMeasuring]);
+
   // Collaboration link management
   const saveCollaborationLink = (link: string) => {
     localStorage.setItem("collaborationLink", link);
@@ -303,6 +356,17 @@ const PlayerMap = ({
   );
 
   const noteWindowActions = useNoteWindowActions();
+  const mapContainerRef = React.useRef<HTMLDivElement | null>(null);
+
+  const mapImageRef = React.useRef<HTMLDivElement | null>(null);
+  const [mapOffset, setMapOffset] = React.useState({ left: 0, top: 0 });
+
+  React.useEffect(() => {
+    if (mapImageRef.current) {
+      const rect = mapImageRef.current.getBoundingClientRect();
+      setMapOffset({ left: rect.left, top: rect.top });
+    }
+  }, [currentMap.data?.activeMap]);
 
   return (
     <>
@@ -314,7 +378,10 @@ const PlayerMap = ({
               {
                 value: {
                   onMarkArea: ([x, y]) => {
-                    if (currentMap.data?.activeMap) {
+                    console.log(`Clicked at (${x}, ${y})`);
+                    if (isMeasuring) {
+                      handleMeasureClick(x, y);
+                    } else if (currentMap.data?.activeMap) {
                       mapPing({
                         variables: {
                           input: {
@@ -358,6 +425,58 @@ const PlayerMap = ({
             </React.Suspense>
           ) : null}
         </FlatContextProvider>
+
+        {measurementPoints.length === 2 && measuredDistance !== null && (
+          <div
+            style={{
+              position: "absolute",
+              left: (measurementPoints[0].x + measurementPoints[1].x) / 2,
+              top: (measurementPoints[0].y + measurementPoints[1].y) / 2,
+              background: "white",
+              padding: "5px",
+              borderRadius: "5px",
+              fontSize: "12px",
+              transform: "translate(-50%, -50%)", // Centers the text
+              pointerEvents: "none",
+            }}
+          >
+            {measuredDistance.toFixed(2)} units
+          </div>
+        )}
+
+        {measurementPoints.length === 2 && (
+          <div
+            ref={mapImageRef}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none",
+            }}
+          >
+            <svg
+              width="100%"
+              height="100%"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                backgroundColor: "rgba(255, 0, 0, 0.1)", // Temporary background to debug visibility
+              }}
+            >
+              <line
+                x1={measurementPoints[0].x - mapOffset.left}
+                y1={measurementPoints[0].y - mapOffset.top}
+                x2={measurementPoints[1].x - mapOffset.left}
+                y2={measurementPoints[1].y - mapOffset.top}
+                stroke="red"
+                strokeWidth="3"
+              />
+            </svg>
+          </div>
+        )}
       </div>
       {!showSplashScreen ? (
         isMapOnly ? null : (
@@ -415,6 +534,22 @@ const PlayerMap = ({
                           <Icon.Label>Zoom Out</Icon.Label>
                         </Toolbar.LongPressButton>
                       </Toolbar.Item>
+                      <Toolbar.Item isActive={isMeasuring}>
+                        <Toolbar.Button
+                          onClick={() => {
+                            setIsMeasuring((prev) => !prev);
+                            console.log(
+                              `Measuring mode toggled: ${!isMeasuring}`
+                            );
+                          }}
+                        >
+                          <Icon.Compass boxSize="20px" />
+                          <Icon.Label>
+                            {isMeasuring ? "Measuring: On" : "Measure Distance"}
+                          </Icon.Label>
+                        </Toolbar.Button>
+                      </Toolbar.Item>
+
                       <Toolbar.Item isActive>
                         <Toolbar.LongPressButton
                           onClick={() => {
