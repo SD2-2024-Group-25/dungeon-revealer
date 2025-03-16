@@ -4,11 +4,14 @@ const path = require("path");
 const router = express.Router();
 
 async function getIterationFolders(sessionPath) {
-  // Goes through session folder and reads all iteration folders
   try {
     const folders = await fs.readdir(sessionPath);
+    const filteredFolders = folders.filter(
+      // no notes or whiteboard
+      (folder) => !["notes", "whiteboard"].includes(folder.toLowerCase())
+    );
     const iterationFolders = await Promise.all(
-      folders.map(async (folder) => {
+      filteredFolders.map(async (folder) => {
         const folderPath = path.join(sessionPath, folder);
         const stats = await fs.stat(folderPath);
         return stats.isDirectory() ? folder : null;

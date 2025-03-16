@@ -27,13 +27,10 @@ import type {
 
 let maps: Maps | null = null;
 
-const uploadRoutes = require("./routes/upload"); //Defines the route for api upload
-const copyRoutes = require("./routes/copy"); //Defines the route for api copy
-const fetchMapRoutes = require("./routes/fetch_maps"); //Defines the route for api fetchdefault
-const fetchdefaultRoutes = require("./routes/fetch_default"); //Defines the route for api fetchdefault
-const deleteRoutes = require("./routes/delete"); //Defines the route for api delete
+const fetchRoutes = require("./routes/fetch"); //Defines the route for api fetch
 const previewRoutes = require("./routes/default_Preview"); //Defines the route for api default_Preview
 const grabIterationDataRoutes = require("./routes/grabIterationData"); //Defines the route for api visualize
+const selectMapRoutes = require("./routes/selectMap"); //Defines the route for api's in select_map_modal.tsx
 //const { parse } = require("json2csv");
 import archiver from "archiver";
 
@@ -159,13 +156,10 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     });
   });
 
-  apiRouter.use("/upload", uploadRoutes); //api call for upload
-  apiRouter.use("/copy", copyRoutes); //api call for copy
-  apiRouter.use("/fetch_default", fetchdefaultRoutes); //api call for fetch_default
-  apiRouter.use("/fetch_maps", fetchMapRoutes); //api call for fetch_maps
-  apiRouter.use("/delete", deleteRoutes); //api call for delete
+  apiRouter.use("/fetch", fetchRoutes); //api call for fetch
   apiRouter.use("/default_Preview", previewRoutes); //api call for default_Preview
   apiRouter.use("/grabIterationData", grabIterationDataRoutes); //api call for visualize
+  apiRouter.use("/selectMap", selectMapRoutes); //api call for select_map_modal.tsx
 
   apiRouter.get("/active-map", requiresPcRole, (req, res) => {
     let activeMap = null;
@@ -265,7 +259,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   });
 
   apiRouter.get(
-    "/iteration/:sessionName/:iterationName/map.jpg",
+    "/iteration/:sessionName/:iterationName/map.png",
     async (req, res) => {
       const { sessionName, iterationName } = req.params;
 
@@ -274,7 +268,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
         "saved",
         sessionName,
         iterationName,
-        "map.jpg"
+        "map.png"
       );
 
       console.log("Serving map.jpg from:", mapFilePath); // Log the file path

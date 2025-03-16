@@ -97,6 +97,8 @@ import { IsDungeonMasterContext } from "../is-dungeon-master-context";
 import { LazyLoadedMapView } from "../lazy-loaded-map-view";
 import { typeFromAST } from "graphql";
 import { position } from "polished";
+import { useEffect, useRef, useState } from "react";
+import * as d3 from "d3";
 
 type ToolMapRecord = {
   name: string;
@@ -751,6 +753,9 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const [error, setError] = React.useState<string | null>(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState<boolean>(true);
+  const [isMoveMentModalOpen, setIsMoveMentModalOpen] =
+    React.useState<boolean>(false);
+  const [showMovementModal, setShowMovementModal] = React.useState(false);
 
   // Fetch sessions if modal is shown and no session is selected
   React.useEffect(() => {
@@ -804,6 +809,18 @@ const ViewModal: React.FC<ViewModalProps> = ({
   return (
     <div style={viewModalOverlayStyle}>
       <div style={viewModalStyle}>
+        {/* Button that opens the movement graph */}
+        <button
+          onClick={() => setShowMovementModal(true)}
+          style={{
+            position: "absolute",
+            left: "1400px",
+            cursor: "pointer",
+          }}
+        >
+          {isMoveMentModalOpen ? "Open Movement Graph" : "Open Movement Graph"}
+        </button>
+
         {/* A button to toggle the sidebar */}
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -894,7 +911,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
               <p>Please select a session</p>
             )}
             <img
-              src={`/api/iteration/${sessionName}/${selectedIteration}/map.jpg`}
+              src={`/api/iteration/${sessionName}/${selectedIteration}/map.png`}
               alt="Map"
               style={{
                 maxWidth: "100%",
@@ -907,6 +924,252 @@ const ViewModal: React.FC<ViewModalProps> = ({
         <button onClick={onClose} style={viewCloseButtonStyle}>
           Close
         </button>
+      </div>
+      {showMovementModal && (
+        <MovementGraphModal
+          show={showMovementModal}
+          onClose={() => setShowMovementModal(false)}
+          sessionName={sessionName}
+        />
+      )}
+    </div>
+  );
+};
+
+interface MovementGraphModalProps {
+  show: boolean;
+  onClose: () => void;
+  sessionName: string;
+}
+
+const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
+  show,
+  onClose,
+  sessionName,
+}) => {
+  const svgRef = React.useRef<HTMLDivElement>(null);
+  const [tokenData, setTokenData] = React.useState<any>(null);
+  const [backgroundImage, setBackgroundImage] = React.useState<string | null>(
+    null
+  );
+  const [bgDimensions, setBgDimensions] = React.useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  // Fetch aggregated visualization data when the modal is shown.
+  React.useEffect(() => {
+    if (show && sessionName) {
+      const fetchVisualizationData = async () => {
+        // Gets all the token data
+        try {
+          const response = await fetch(`/api/grabIterationData/visualData`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionName }),
+          });
+          if (response.ok) {
+            console.log("Fetched vis data");
+          } else {
+            console.log("Failed to fetch visualization data");
+          }
+          const json = await response.json();
+          setTokenData(json.data);
+        } catch (error) {
+          console.error("Error fetching vis data:", error);
+        }
+      };
+      fetchVisualizationData();
+    }
+  }, [show, sessionName]);
+
+  React.useEffect(() => {
+    // Gets the map of the session
+    if (show && sessionName) {
+      const fetchImage = async () => {
+        try {
+          const response = await fetch(
+            `/api/fetch/iterationMap?sessionName=${encodeURIComponent(
+              sessionName
+            )}`
+          );
+          if (response.ok) {
+            console.log("Fetched back image");
+          } else {
+            console.log("Failed to fetch back image");
+          }
+          const json = await response.json();
+          setBackgroundImage(json.url);
+        } catch (error) {
+          console.error("Error fetching back image:", error);
+        }
+      };
+      fetchImage();
+    }
+  }, [show, sessionName]);
+
+  React.useEffect(() => {
+    // Gets the size of the map image, to align with token locations (same as DR map)
+    if (!backgroundImage) return;
+    const img = new Image();
+    img.src = backgroundImage;
+    img.onload = () => {
+      setBgDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = (err) => {
+      console.error("Error loading background image", err);
+    };
+  }, [backgroundImage]);
+
+  // Makes the graph
+  React.useEffect(() => {
+    if (
+      // Fixes null errors
+      !show ||
+      !tokenData ||
+      Object.keys(tokenData).length === 0 ||
+      !svgRef.current ||
+      !backgroundImage ||
+      !bgDimensions
+    )
+      return;
+
+    // Graph dimensions
+    const svgWidth = 800;
+    const svgHeight = 800;
+    const margin = { top: 40, right: 40, bottom: 40, left: 40 };
+    const width = svgWidth - margin.left - margin.right;
+    const height = svgHeight - margin.top - margin.bottom;
+
+    // Clears old svg
+    d3.select(svgRef.current).select("svg").remove();
+
+    // Create SVG element
+    const svg = d3
+      .select(svgRef.current)
+      .append("svg")
+      .attr("width", svgWidth)
+      .attr("height", svgHeight)
+      .attr("viewBox", `0 0 ${svgWidth} ${svgHeight}`)
+      .append("g")
+      .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+    // Create scales that align with image dimensions
+    const xScale = d3
+      .scaleLinear()
+      .domain([0, bgDimensions.width])
+      .range([0, width]);
+    const yScale = d3
+      .scaleLinear()
+      .domain([0, bgDimensions.height])
+      .range([0, height]);
+
+    // Create background image SVG element
+    svg
+      .append("image")
+      .attr("xlink:href", backgroundImage)
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", width)
+      .attr("height", height)
+      .attr("preserveAspectRatio", "xMidYMid slice")
+      .attr("opacity", 0.7);
+
+    // Create gridlines for graph at 100 intervals
+    const xTickInterval = 100;
+    const yTickInterval = 100;
+    const xTicks = d3.range(0, bgDimensions.width + 1, xTickInterval);
+    const yTicks = d3.range(0, bgDimensions.height + 1, yTickInterval);
+
+    const xGrid = d3
+      .axisBottom(xScale)
+      .tickValues(xTicks)
+      .tickSize(-height)
+      .tickFormat(() => "");
+    svg
+      .append("g")
+      .attr("transform", `translate(0, ${height})`)
+      .call(xGrid)
+      .selectAll("line")
+      .attr("stroke", "#ddd");
+
+    const yGrid = d3
+      .axisLeft(yScale)
+      .tickValues(yTicks)
+      .tickSize(-width)
+      .tickFormat(() => "");
+    svg.append("g").call(yGrid).selectAll("line").attr("stroke", "#ddd");
+
+    // Create axes
+    const xAxis = d3.axisBottom(xScale).tickValues(xTicks);
+    const yAxis = d3.axisLeft(yScale).tickValues(yTicks);
+    svg.append("g").attr("transform", `translate(0, ${height})`).call(xAxis);
+    svg.append("g").call(yAxis);
+
+    // Put the tokens on
+    Object.values(tokenData).forEach((token: any) => {
+      const points = token.movements;
+      if (!points || points.length === 0) return;
+
+      const lineGenerator = d3
+        .line()
+        .x((d: any) => xScale(+d.x))
+        .y((d: any) => yScale(+d.y))
+        .curve(d3.curveMonotoneX);
+
+      // Movement lines
+      svg
+        .append("path")
+        .datum(points)
+        .attr("d", lineGenerator)
+        .attr("stroke", token.color)
+        .attr("fill", "none")
+        .attr("stroke-width", 2);
+      svg
+        .selectAll(`.token-${token.id}`)
+        .data(points)
+        .enter()
+        .append("circle")
+        .attr("cx", (d: any) => xScale(+d.x))
+        .attr("cy", (d: any) => yScale(+d.y))
+        .attr("r", 4)
+        .attr("fill", token.color);
+    });
+
+    // Create a legend in the top-left
+    const legend = svg.append("g").attr("transform", "translate(10,10)");
+    Object.values(tokenData).forEach((token: any, i: number) => {
+      legend
+        .append("rect")
+        .attr("x", 0)
+        .attr("y", i * 25)
+        .attr("width", 20)
+        .attr("height", 20)
+        .attr("fill", token.color);
+      legend
+        .append("text")
+        .attr("x", 25)
+        .attr("y", i * 25 + 15)
+        .text(token.label)
+        .attr("font-size", "12px");
+    });
+  }, [show, tokenData, backgroundImage, bgDimensions]);
+
+  if (!show) return null;
+
+  return (
+    <div style={movementModalOverlayStyle}>
+      <div style={movementModalStyle}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: "10px",
+          }}
+        >
+          <h2>Movement Graph for {sessionName}</h2>
+          <button onClick={onClose}>Close</button>
+        </div>
+        <div ref={svgRef} style={{ width: "800px", height: "800px" }} />
       </div>
     </div>
   );
@@ -935,24 +1198,6 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
     } catch (err) {
       console.error("Error saving session:", err);
     }
-    /*
-    try{
-
-      const response = await fetch('/api/visualize/graph', {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionName }),
-      });
-
-      if(response.ok){
-        console.log("Session Graphed successfully.");
-      } else {
-        console.error("Failed to graph session.");
-      }
-    } catch(err) {
-      console.error("Error graphing session:", err);
-    }
-      */
   };
 
   if (!show) return null;
@@ -986,6 +1231,30 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
       </div>
     </div>
   );
+};
+
+const movementModalOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 1000000001,
+};
+
+const movementModalStyle: React.CSSProperties = {
+  position: "relative",
+  background: "white",
+  padding: "20px",
+  borderRadius: "8px",
+  textAlign: "center",
+  width: "850px",
+  height: "850px",
+  zIndex: 1000000001,
 };
 
 const viewModalOverlayStyle: React.CSSProperties = {

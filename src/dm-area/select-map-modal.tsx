@@ -26,7 +26,7 @@ const emitter = mitt();
 // deleteScenario function to call API and delete a selected map
 const deleteScenario = async (folderName: string): Promise<void> => {
   try {
-    const response = await fetch(`/api/delete/destroy`, {
+    const response = await fetch(`/api/selectMap/delete`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folderName }),
@@ -55,7 +55,7 @@ const uploadScenario = async (
     }))
   );
 
-  const response = await fetch("/api/upload/scenario", {
+  const response = await fetch("/api/selectMap/upload", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ files: formattedFiles, parentFolder, folderName }),
@@ -795,7 +795,7 @@ export const SelectScenarioModal = ({
 
   //Fetch scenarios from the "defaultmaps" directory (used for list)
   React.useEffect(() => {
-    fetch("/api/fetch_default/defaultmaps")
+    fetch("/api/fetch/defaultmaps")
       .then((res) => res.json())
       .then((data) => setScenarios(data))
       .catch((err) => console.error("Error fetching scenarios:", err));
@@ -803,7 +803,7 @@ export const SelectScenarioModal = ({
 
   //Function to put copied scenario in maps folder
   const onCreateScenario = (sourceFolder: string, newScenarioName: string) => {
-    fetch("/api/copy/files", {
+    fetch("/api/selectMap/copy", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sourceFolder, newScenarioName }),
