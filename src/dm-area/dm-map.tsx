@@ -1,4 +1,5 @@
 import * as React from "react";
+import * as userSession from "../chat/user-session";
 import styled from "@emotion/styled/macro";
 import * as io from "io-ts";
 import { pipe, identity } from "fp-ts/function";
@@ -1243,6 +1244,34 @@ export const DmMap = (props: {
     setViewModalOpen(true);
   };
 
+  const [isIframeOpen, setIsIframeOpen] = React.useState(false);
+  const [iframeUrl, setIframeUrl] = React.useState<string | null>(null);
+
+  const openExcalidraw = () => {
+    try {
+      const user = userSession.getUser();
+      if (!user) {
+        throw new Error("User data not available");
+      }
+      const excalidrawUrl = import.meta.env.VITE_EXCALIDRAW_URL;
+      const url = new URL(excalidrawUrl);
+      url.searchParams.append("username", user.name);
+      url.searchParams.append("userID", user.id);
+
+      // If a previous collaboration session exists, retain the hash
+      const savedCollabLink = localStorage.getItem("collaborationLink");
+      if (savedCollabLink) {
+        const collabUrl = new URL(savedCollabLink);
+        url.hash = collabUrl.hash;
+      }
+
+      setIframeUrl(url.toString());
+      setIsIframeOpen(true);
+    } catch (error) {
+      console.error("Error opening drawing:", error);
+    }
+  };
+
   return (
     <FlatContextProvider
       value={[
@@ -1477,6 +1506,12 @@ export const DmMap = (props: {
                   </Toolbar.Button>
                 </Toolbar.Item>
                 <Toolbar.Item isActive>
+                  <Toolbar.Button onClick={openExcalidraw}>
+                    <Icon.Drawing boxSize="20px" />
+                    <Icon.Label>Drawing</Icon.Label>
+                  </Toolbar.Button>
+                </Toolbar.Item>
+                <Toolbar.Item isActive>
                   <Toolbar.Button
                     onClick={() => {
                       props.openNotes();
@@ -1581,6 +1616,46 @@ export const DmMap = (props: {
         />
       )}
       {confirmDialogNode}
+      {isIframeOpen && iframeUrl && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "20px",
+              borderRadius: "8px",
+              width: "90%",
+              height: "90%",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <button
+              onClick={() => setIsIframeOpen(false)}
+              style={{ alignSelf: "flex-end", marginBottom: "10px" }}
+            >
+              Close
+            </button>
+            <iframe
+              src={iframeUrl}
+              style={{ flex: 1, border: "none", borderRadius: "4px" }}
+              title="Embedded Content"
+            />
+          </div>
+        </div>
+      )}
       <SharedTokenMenu currentMapId={map.id} />
       <ContextMenuRenderer map={map} />
     </FlatContextProvider>

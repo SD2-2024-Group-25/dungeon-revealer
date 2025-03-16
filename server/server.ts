@@ -431,12 +431,14 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
         fs.mkdirSync(savedPath, { recursive: true });
       }
 
+      renameNotesFiles(sourceNotesFolder);
+
       copyFolderRecursive(sourceSessionFolder, destinationFolder);
 
       createSessionCSV(sourceSessionFolder, destinationFolder);
 
       copyFolderRecursive(sourceNotesFolder, destinationNotesFolder);
-      copyFolderRecursive(sourceNotesFolder, destinationWhiteboardFolder);
+      copyFolderRecursive(sourceWhiteboardFolder, destinationWhiteboardFolder);
 
       deleteFolderContents(sourceSessionFolder);
       deleteFolderContents(sourceNotesFolder);
@@ -607,6 +609,38 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
         }
       });
     }
+  }
+
+  function renameNotesFiles(notesFolderPath: string) {
+    if (!fs.existsSync(notesFolderPath)) return;
+
+    const files = fs.readdirSync(notesFolderPath);
+
+    files.forEach((file) => {
+      const filePath = path.join(notesFolderPath, file);
+      if (fs.statSync(filePath).isFile() && file.endsWith(".txt")) {
+        let content = fs.readFileSync(filePath, "utf8");
+
+        // Extract userName
+        const match = content.match(/^User:\s*(.+)$/m);
+        if (match) {
+          const userName = match[1].trim().replace(/[^a-zA-Z0-9-_]/g, "_");
+          const newFileName = `${userName}_notes.txt`;
+          const newFilePath = path.join(notesFolderPath, newFileName);
+
+          content = content.replace(/^User:\s*.+\n?/, "").trimStart();
+
+          // Rename and overwrite the file
+          fs.writeFileSync(filePath, content, "utf8");
+
+          // Rename file
+          if (!fs.existsSync(newFilePath)) {
+            fs.renameSync(filePath, newFilePath);
+            console.log(`Renamed and cleaned: ${file} → ${newFileName}`);
+          }
+        }
+      }
+    });
   }
 
   const { router: mapsRouter } = createMapRouter({
