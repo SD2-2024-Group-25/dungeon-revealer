@@ -221,7 +221,6 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
-  //just added
   apiRouter.get("/list-iterations/:folder", async (req, res) => {
     const folderName = req.params.folder; // Dynamically get folder name
     const targetFolderPath = path.join(researchPath, "saved", folderName);
@@ -249,7 +248,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   });
 
   apiRouter.get(
-    "/iteration/:sessionName/:iterationName/map.jpg",
+    "/iteration/:sessionName/:iterationName/:map",
     async (req, res) => {
       const { sessionName, iterationName } = req.params;
 
@@ -261,7 +260,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
         "map.jpg"
       );
 
-      console.log("Serving map.jpg from:", mapFilePath); // Log the file path
+      console.log("Serving map.jpg from:", mapFilePath);
 
       if (!fs.existsSync(mapFilePath)) {
         console.error("File not found:", mapFilePath);
@@ -269,6 +268,24 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       }
 
       res.sendFile(mapFilePath);
+    }
+  );
+
+  app.get(
+    "/api/iteration/:sessionName/:iterationName/settings.json",
+    (req, res) => {
+      const { sessionName, iterationName } = req.params;
+
+      const settingsPath = path.join(
+        researchPath,
+        "saved",
+        sessionName,
+        iterationName,
+        "settings.json"
+      );
+      res.setHeader("Content-Type", "application/json");
+      res.sendFile(settingsPath);
+      res.sendFile(settingsPath);
     }
   );
 

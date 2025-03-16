@@ -733,6 +733,7 @@ interface ViewModalProps {
   show: boolean;
   onClose: () => void;
   sessionName: string;
+  mapName: string;
   onSessionSelect: (session: string) => void;
 }
 
@@ -740,6 +741,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
   show,
   onClose,
   sessionName,
+  mapName,
   onSessionSelect,
 }) => {
   const [sessions, setSessions] = React.useState<string[]>([]);
@@ -751,6 +753,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const [error, setError] = React.useState<string | null>(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState<boolean>(true);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
   // Fetch sessions if modal is shown and no session is selected
   React.useEffect(() => {
@@ -787,6 +790,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
           }
           const data = await response.json();
           setIterations(data.iterations);
+          setSelectedIteration(data.iterations[0]);
         } catch (err) {
           console.error("Error fetching iterations:", err);
           setError("Failed to load iterations");
@@ -795,9 +799,87 @@ const ViewModal: React.FC<ViewModalProps> = ({
         }
       };
       fetchIterations();
-      setSelectedIteration(null);
+      //setSelectedIteration(null); take comment out if you wanna display nothing at first instead of the first in-game action snapshot for that session
     }
   }, [show, sessionName]);
+
+  //When the selected iteration changes, fetch settings.json and draw the map with tokens
+  React.useEffect(() => {
+    const drawMapWithTokens = async () => {
+      if (!selectedIteration || !sessionName) {
+        console.log("Missing required props for drawing:", {
+          selectedIteration,
+          sessionName,
+        });
+        return;
+      }
+      try {
+        const settingsUrl = `/api/iteration/${sessionName}/${selectedIteration}/settings.json`;
+        console.log("Fetching settings from:", settingsUrl);
+        const settingsResponse = await fetch(settingsUrl);
+        if (!settingsResponse.ok) {
+          throw new Error("Failed to fetch settings.json");
+        }
+        const settings = await settingsResponse.json();
+        console.log("Fetched settings:", settings);
+
+        const dynamicMapName = settings.mapPath || "map.jpg";
+        const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}/${dynamicMapName}`;
+        console.log("Loading map image from:", mapImageUrl);
+
+        const mapImage = new Image();
+        mapImage.src = mapImageUrl;
+
+        mapImage.onload = () => {
+          const canvas = canvasRef.current;
+          if (!canvas) {
+            console.error("Canvas element is not available.");
+            return;
+          }
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            console.error("Unable to get 2D context from canvas.");
+            return;
+          }
+
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
+          console.log("Map image drawn to canvas.");
+
+          if (settings.tokens && Array.isArray(settings.tokens)) {
+            settings.tokens.forEach((token: any) => {
+              ctx.beginPath();
+              ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
+              ctx.fillStyle = token.color;
+              ctx.fill();
+              ctx.closePath();
+
+              if (token.label) {
+                ctx.font = "14px sans-serif";
+                ctx.fillStyle = "#000";
+                ctx.fillText(
+                  token.label,
+                  token.x - token.radius,
+                  token.y - token.radius
+                );
+              }
+            });
+            console.log("Tokens drawn on canvas.");
+          } else {
+            console.log("No tokens found in settings.");
+          }
+        };
+
+        mapImage.onerror = (error) => {
+          console.error("Error loading map image:", error);
+        };
+      } catch (error) {
+        console.error("Error in drawMapWithTokens:", error);
+      }
+    };
+
+    drawMapWithTokens();
+  }, [selectedIteration, sessionName, mapName]);
 
   if (!show) return null;
 
@@ -885,6 +967,16 @@ const ViewModal: React.FC<ViewModalProps> = ({
                 {selectedIteration ? (
                   <>
                     <h3>{selectedIteration}</h3>
+                    <canvas
+                      ref={canvasRef}
+                      width={800}
+                      height={600}
+                      style={{
+                        maxWidth: "100%",
+                        height: "calc(100% - 40px)",
+                        objectFit: "contain",
+                      }}
+                    />
                   </>
                 ) : (
                   <p>Please select an iteration</p>
@@ -893,15 +985,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
             ) : (
               <p>Please select a session</p>
             )}
-            <img
-              src={`/api/iteration/${sessionName}/${selectedIteration}/map.jpg`}
-              alt="Map"
-              style={{
-                maxWidth: "100%",
-                height: "calc(100% - 40px)",
-                objectFit: "contain",
-              }}
-            />
           </div>
         </div>
         <button onClick={onClose} style={viewCloseButtonStyle}>
@@ -1017,7 +1100,7 @@ const modalStyle: React.CSSProperties = {
 const listContainerStyle: React.CSSProperties = {
   maxHeight: "200px", // Set a max height for the list container
   overflowY: "auto", // Enable scrolling within the list container
-  marginBottom: "10px", // Optional: Add space at the bottom of the list
+  marginBottom: "10px",
 };
 
 const buttonStyle: React.CSSProperties = {
