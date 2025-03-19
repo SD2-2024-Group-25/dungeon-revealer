@@ -732,6 +732,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
   const authenticatedSockets = new Set();
 
+  let currentCollaborationLink: string | null = null;
+
   io.on("connection", (socket) => {
     console.log(`WS client ${socket.handshake.address} ${socket.id} connected`);
 
@@ -742,7 +744,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
     socket.on("authenticate", ({ password, desiredRole }) => {
       socketIOGraphQLServer.disposeSocket(socket);
-      socket.removeAllListeners();
+      // TODO: NEED TO MAKE SURE THIS DOESNT BREAK THINGS
+      //socket.removeAllListeners();
 
       const role = getRole(password);
       if (role === null) {
@@ -764,8 +767,22 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
       socketIOGraphQLServer.registerSocket(socket);
 
+      socket.on("update-collaboration-link", (payload: { link: string }) => {
+        // Update the server's current link
+        currentCollaborationLink = payload.link;
+        // Broadcast to all clients
+        io.emit("collaboration-link-updated", { link: payload.link });
+      });
+
       socket.emit("authenticated");
     });
+
+    // Send the current collaboration link to the new client upon connection
+    if (currentCollaborationLink) {
+      socket.emit("collaboration-link-updated", {
+        link: currentCollaborationLink,
+      });
+    }
 
     socket.once("disconnect", function () {
       authenticatedSockets.delete(socket);

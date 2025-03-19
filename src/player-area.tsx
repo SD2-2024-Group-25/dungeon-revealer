@@ -244,20 +244,40 @@ const PlayerMap = ({
     localStorage.removeItem("collaborationLink");
   };
 
+  //const [collabLink, setCollabLink] = React.useState<string | null>(null);
+  const [collabLink, setCollabLink] = React.useState<string | null>(
+    import.meta.env.VITE_EXCALIDRAW_URL || null
+  );
+  // Optionally, on mount load initial value from localStorage:
+  React.useEffect(() => {
+    setCollabLink(localStorage.getItem("collaborationLink"));
+  }, []);
+
   React.useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.data.type === "UPDATE_COLLABORATION_LINK") {
+      if (event.data?.type === "UPDATE_COLLABORATION_LINK") {
         const { link } = event.data.payload;
-        if (link) {
-          saveCollaborationLink(link);
-        } else {
-          clearCollaborationLink();
-        }
+        setCollabLink(link);
+        localStorage.setItem("collaborationLink", link);
+        // also broadcast to server
+        socket.emit("update-collaboration-link", { link });
       }
+      // handle "OPEN_EXCALIDRAW" if you want here
     };
+
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  }, [socket]);
+
+  React.useEffect(() => {
+    const handleSocketEvent = ({ link }: { link: string }) => {
+      setCollabLink(link);
+      localStorage.setItem("collaborationLink", link);
+    };
+
+    socket.on("collaboration-link-updated", handleSocketEvent);
+    return () => socket.off("collaboration-link-updated", handleSocketEvent);
+  }, [socket]);
 
   React.useEffect(() => {
     const contextmenuListener = (ev: Event) => {
@@ -565,19 +585,29 @@ const PlayerMap = ({
                           onClick={() => {
                             try {
                               const user = userSession.getUser();
-                              if (!user) {
+                              if (!user)
                                 throw new Error("User data not available");
-                              }
-                              const excalidrawUrl = import.meta.env
-                                .VITE_EXCALIDRAW_URL;
-                              const url = new URL(excalidrawUrl);
-                              url.searchParams.append("username", user.name);
-                              url.searchParams.append("userID", user.id);
-                              const savedCollabLink = getCollaborationLink();
-                              if (savedCollabLink) {
-                                const collabUrl = new URL(savedCollabLink);
+
+                              // Use the saved collaboration link if available, or the default URL
+                              const baseUrl =
+                                collabLink ||
+                                import.meta.env.VITE_EXCALIDRAW_URL;
+                              const url = new URL(baseUrl);
+
+                              // Append user info as query parameters
+                              url.searchParams.set("username", user.name);
+                              url.searchParams.set("userID", user.id);
+
+                              // If a saved collaboration link exists, preserve its hash
+                              if (collabLink) {
+                                const collabUrl = new URL(collabLink);
                                 url.hash = collabUrl.hash;
                               }
+
+                              console.log(
+                                "Opening Excalidraw URL:",
+                                url.toString()
+                              );
                               setIframeUrl(url.toString());
                               setIsIframeOpen(true);
                             } catch (error) {
