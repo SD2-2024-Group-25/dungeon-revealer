@@ -188,14 +188,12 @@ const PlayerMap = ({
   const [measuredDistance, setMeasuredDistance] = React.useState<number | null>(
     null
   );
+  const [gridData, setGridData] = React.useState(null);
 
-  const handleMeasureClick = (x: number, y: number) => {
+  const handleMeasureClick = async (x: number, y: number) => {
     if (!isMeasuring) return; // Only process clicks if measuring mode is active
 
-    console.log("Raw Click:", measurementPoints);
-    console.log("Map Offset:", mapOffset);
-
-    console.log(`handleMeasureClick called with (${x}, ${y})`);
+    console.log(currentMap.data?.activeMap?.id);
 
     if (measurementPoints.length === 0) {
       // Store first point
@@ -204,9 +202,26 @@ const PlayerMap = ({
       // Store second point and calculate distance
       const p1 = measurementPoints[0];
       const p2 = { x, y };
-      const distance = Math.sqrt(
-        Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)
-      );
+      const deltaX = Math.abs(p2.x - p1.x);
+      const deltaY = Math.abs(p2.y - p1.y);
+      let distance = Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
+
+      const grid = await fetchGridData();
+
+      if (grid) {
+        const { columnWidth, columnHeight } = grid;
+
+        // Convert pixel distance into grid units separately for X and Y
+        const gridX = deltaX / columnWidth;
+        const gridY = deltaY / columnHeight;
+
+        // Calculate final grid distance using the Pythagorean theorem
+        distance = Math.sqrt(Math.pow(gridX, 2) + Math.pow(gridY, 2));
+
+        console.log(`Measured distance: ${distance.toFixed(2)} grid units`);
+      } else {
+        console.log(`Measured distance: ${distance.toFixed(2)} px`);
+      }
 
       setMeasurementPoints([...measurementPoints, p2]);
       setMeasuredDistance(distance);
@@ -270,6 +285,32 @@ const PlayerMap = ({
     return () =>
       window.document.removeEventListener("visibilitychange", listener, false);
   }, []);
+
+  const fetchGridData = React.useCallback(async () => {
+    if (!currentMap.data?.activeMap?.id) return null; // Ensure we have a valid map ID
+    console.log("here");
+
+    try {
+      const response = await fetch(
+        `/api/get-grid?mapId=${currentMap.data.activeMap.id}`
+      );
+      if (!response.ok) throw new Error("Failed to fetch grid data");
+
+      const { grid } = await response.json();
+      return grid; // Returns grid object or null if no grid
+    } catch (error) {
+      console.error("Error fetching grid data:", error);
+      return null;
+    }
+  }, [currentMap]);
+
+  React.useEffect(() => {
+    if (isMeasuring) {
+      fetchGridData().then((data) => setGridData(data));
+    } else {
+      setGridData(null);
+    }
+  }, [isMeasuring, fetchGridData]);
 
   const updateToken = React.useCallback(
     ({ id, ...updates }) => {
@@ -348,9 +389,6 @@ const PlayerMap = ({
     }
   );
 
-  const noteWindowActions = useNoteWindowActions();
-  const mapContainerRef = React.useRef<HTMLDivElement | null>(null);
-
   const mapImageRef = React.useRef<HTMLDivElement | null>(null);
   const [mapOffset, setMapOffset] = React.useState({ left: 0, top: 0 });
 
@@ -423,32 +461,21 @@ const PlayerMap = ({
           <div
             style={{
               position: "absolute",
-              left: (measurementPoints[0].x + measurementPoints[1].x) / 2,
-              top: (measurementPoints[0].y + measurementPoints[1].y) / 2,
+              left: "50%",
+              top: "10px",
               background: "white",
-              padding: "5px",
+              padding: "5px 10px",
               borderRadius: "5px",
-              fontSize: "12px",
-              transform: "translate(-50%, -50%)", // Centers the text
+              fontSize: "14px",
+              fontWeight: "bold",
+              transform: "translateX(-50%)", // Center the text horizontally
               pointerEvents: "none",
+              zIndex: 1000, // Ensure it stays on top
+              boxShadow: "0px 2px 5px rgba(0,0,0,0.2)", // Optional styling for visibility
             }}
           >
             {measuredDistance.toFixed(2)} units
           </div>
-        )}
-
-        {measurementPoints.length === 2 && (
-          <div
-            ref={mapImageRef}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              pointerEvents: "none",
-            }}
-          ></div>
         )}
       </div>
       {!showSplashScreen ? (
