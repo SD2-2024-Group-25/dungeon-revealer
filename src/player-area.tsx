@@ -208,13 +208,6 @@ const PlayerMap = ({
         Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)
       );
 
-      console.log("Adjusted Coordinates:", {
-        x1: measurementPoints[0].x - mapOffset.left,
-        y1: measurementPoints[0].y - mapOffset.top,
-        x2: measurementPoints[1].x - mapOffset.left,
-        y2: measurementPoints[1].y - mapOffset.top,
-      });
-
       setMeasurementPoints([...measurementPoints, p2]);
       setMeasuredDistance(distance);
       console.log(distance);
@@ -455,27 +448,7 @@ const PlayerMap = ({
               height: "100%",
               pointerEvents: "none",
             }}
-          >
-            <svg
-              width="100%"
-              height="100%"
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                backgroundColor: "rgba(255, 0, 0, 0.1)", // Temporary background to debug visibility
-              }}
-            >
-              <line
-                x1={measurementPoints[0].x - mapOffset.left}
-                y1={measurementPoints[0].y - mapOffset.top}
-                x2={measurementPoints[1].x - mapOffset.left}
-                y2={measurementPoints[1].y - mapOffset.top}
-                stroke="red"
-                strokeWidth="3"
-              />
-            </svg>
-          </div>
+          ></div>
         )}
       </div>
       {!showSplashScreen ? (
