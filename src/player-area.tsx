@@ -245,8 +245,8 @@ const PlayerMap = ({
   };
 
   //const [collabLink, setCollabLink] = React.useState<string | null>(null);
-  const [collabLink, setCollabLink] = React.useState<string | null>(
-    import.meta.env.VITE_EXCALIDRAW_URL || null
+  const [collabLink, setCollabLink] = React.useState<string>(
+    import.meta.env.VITE_EXCALIDRAW_URL
   );
   // Optionally, on mount load initial value from localStorage:
   React.useEffect(() => {

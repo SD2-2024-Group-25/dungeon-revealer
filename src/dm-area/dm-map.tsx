@@ -98,6 +98,7 @@ import { IsDungeonMasterContext } from "../is-dungeon-master-context";
 import { LazyLoadedMapView } from "../lazy-loaded-map-view";
 import { typeFromAST } from "graphql";
 import { position } from "polished";
+import { useSocket } from "../socket";
 
 type ToolMapRecord = {
   name: string;
@@ -1247,24 +1248,80 @@ export const DmMap = (props: {
   const [isIframeOpen, setIsIframeOpen] = React.useState(false);
   const [iframeUrl, setIframeUrl] = React.useState<string | null>(null);
 
+  const socket = useSocket();
+
+  React.useEffect(() => {
+    // authenticate:
+    socket.emit("authenticate", {
+      password: "SUPER_SECRET_DM_PASSWORD",
+      desiredRole: "dm",
+    });
+
+    // Optionally listen for "authenticated"
+    socket.on("authenticated", () => {
+      console.log(
+        "Socket is authenticated. Now can send events like update-collaboration-link"
+      );
+    });
+
+    return () => {
+      socket.off("authenticated");
+    };
+  }, [socket]);
+  //const [collabLink, setCollabLink] = React.useState<string | null>(null);
+  const [collabLink, setCollabLink] = React.useState<string>(
+    import.meta.env.VITE_EXCALIDRAW_URL
+  );
+  // Optionally, on mount load initial value from localStorage:
+  React.useEffect(() => {
+    setCollabLink(localStorage.getItem("collaborationLink"));
+  }, []);
+
+  React.useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "UPDATE_COLLABORATION_LINK") {
+        const { link } = event.data.payload;
+        setCollabLink(link);
+        localStorage.setItem("collaborationLink", link);
+        // also broadcast to server
+        socket.emit("update-collaboration-link", { link });
+      }
+      // handle "OPEN_EXCALIDRAW" if you want here
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [socket]);
+
+  React.useEffect(() => {
+    const handleSocketEvent = ({ link }: { link: string }) => {
+      setCollabLink(link);
+      localStorage.setItem("collaborationLink", link);
+    };
+
+    socket.on("collaboration-link-updated", handleSocketEvent);
+    return () => socket.off("collaboration-link-updated", handleSocketEvent);
+  }, [socket]);
+
   const openExcalidraw = () => {
     try {
       const user = userSession.getUser();
-      if (!user) {
-        throw new Error("User data not available");
-      }
-      const excalidrawUrl = import.meta.env.VITE_EXCALIDRAW_URL;
-      const url = new URL(excalidrawUrl);
-      url.searchParams.append("username", user.name);
-      url.searchParams.append("userID", user.id);
+      if (!user) throw new Error("User data not available");
 
-      // If a previous collaboration session exists, retain the hash
-      const savedCollabLink = localStorage.getItem("collaborationLink");
-      if (savedCollabLink) {
-        const collabUrl = new URL(savedCollabLink);
+      // Use the saved collaboration link if available, or the default URL
+      const baseUrl = collabLink || import.meta.env.VITE_EXCALIDRAW_URL;
+      const url = new URL(baseUrl);
+
+      // Append user info as query parameters
+      url.searchParams.set("username", user.name);
+      url.searchParams.set("userID", user.id);
+
+      // If a saved collaboration link exists, preserve its hash
+      if (collabLink) {
+        const collabUrl = new URL(collabLink);
         url.hash = collabUrl.hash;
       }
 
+      console.log("Opening Excalidraw URL:", url.toString());
       setIframeUrl(url.toString());
       setIsIframeOpen(true);
     } catch (error) {
