@@ -66,7 +66,6 @@ const NoteEditorModal: React.FC<NoteEditorModalProps> = ({ onClose }) => {
   // Load the player's existing notes when the modal opens.
   React.useEffect(() => {
     const savedNotes = localStorage.getItem(noteStorageKey);
-    console.log("Loaded saved notes:", savedNotes);
     if (savedNotes) {
       setNoteContent(savedNotes);
     }
@@ -83,12 +82,6 @@ const NoteEditorModal: React.FC<NoteEditorModalProps> = ({ onClose }) => {
           content: noteContent,
         }),
       });
-
-      if (!response.ok) {
-        console.error("Failed to save notes.");
-      } else {
-        console.log("Notes saved successfully.");
-      }
     } catch (error) {
       console.error("Error saving notes:", error);
     }
@@ -189,13 +182,8 @@ const PlayerMap = ({
     null
   );
 
-  const handleMeasureClick = (x: number, y: number) => {
+  const handleMeasureClick = async (x: number, y: number) => {
     if (!isMeasuring) return; // Only process clicks if measuring mode is active
-
-    console.log("Raw Click:", measurementPoints);
-    console.log("Map Offset:", mapOffset);
-
-    console.log(`handleMeasureClick called with (${x}, ${y})`);
 
     if (measurementPoints.length === 0) {
       // Store first point
@@ -204,31 +192,58 @@ const PlayerMap = ({
       // Store second point and calculate distance
       const p1 = measurementPoints[0];
       const p2 = { x, y };
-      const distance = Math.sqrt(
-        Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)
-      );
+      const deltaX = Math.abs(p2.x - p1.x);
+      const deltaY = Math.abs(p2.y - p1.y);
+      let distance = Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
 
-      console.log("Adjusted Coordinates:", {
-        x1: measurementPoints[0].x - mapOffset.left,
-        y1: measurementPoints[0].y - mapOffset.top,
-        x2: measurementPoints[1].x - mapOffset.left,
-        y2: measurementPoints[1].y - mapOffset.top,
-      });
+      // Load the grid data from settings.json for the current map ID
+      try {
+        const response = await fetch(
+          `/grid/${currentMap.data?.activeMap?.id}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+
+          // Update the local state based on the response
+          setGridData(data.grid);
+
+          if (data.grid) {
+            const { columnWidth, columnHeight } = data.grid;
+
+            // Convert pixel distance into grid units separately for X and Y
+            const gridX = deltaX / columnWidth;
+            const gridY = deltaY / columnHeight;
+
+            // Calculate final grid distance using the Pythagorean theorem
+            distance = Math.sqrt(Math.pow(gridX, 2) + Math.pow(gridY, 2));
+          }
+        } else {
+          console.error("Failed to update recording state");
+        }
+      } catch (err) {
+        console.error("Error making API request:", err);
+      }
 
       setMeasurementPoints([...measurementPoints, p2]);
       setMeasuredDistance(distance);
-      console.log(distance);
     } else {
-      console.log("Resetting measurement");
       // Reset measurement
       setMeasurementPoints([{ x, y }]);
       setMeasuredDistance(null);
     }
   };
 
+  const [gridData, setGridData] = React.useState(false);
+
   React.useEffect(() => {
     if (!isMeasuring) {
-      console.log("Measuring mode OFF - Clearing measurements");
       setMeasurementPoints([]);
       setMeasuredDistance(null);
     }
@@ -375,9 +390,6 @@ const PlayerMap = ({
     }
   );
 
-  const noteWindowActions = useNoteWindowActions();
-  const mapContainerRef = React.useRef<HTMLDivElement | null>(null);
-
   const mapImageRef = React.useRef<HTMLDivElement | null>(null);
   const [mapOffset, setMapOffset] = React.useState({ left: 0, top: 0 });
 
@@ -398,7 +410,6 @@ const PlayerMap = ({
               {
                 value: {
                   onMarkArea: ([x, y]) => {
-                    console.log(`Clicked at (${x}, ${y})`);
                     if (isMeasuring) {
                       handleMeasureClick(x, y);
                     } else if (currentMap.data?.activeMap) {
@@ -450,51 +461,20 @@ const PlayerMap = ({
           <div
             style={{
               position: "absolute",
-              left: (measurementPoints[0].x + measurementPoints[1].x) / 2,
-              top: (measurementPoints[0].y + measurementPoints[1].y) / 2,
+              left: "50%",
+              top: "10px",
               background: "white",
-              padding: "5px",
+              padding: "5px 10px",
               borderRadius: "5px",
-              fontSize: "12px",
-              transform: "translate(-50%, -50%)", // Centers the text
+              fontSize: "14px",
+              fontWeight: "bold",
+              transform: "translateX(-50%)", // Center the text horizontally
               pointerEvents: "none",
+              zIndex: 1000, // Ensure it stays on top
+              boxShadow: "0px 2px 5px rgba(0,0,0,0.2)", // Optional styling for visibility
             }}
           >
             {measuredDistance.toFixed(2)} units
-          </div>
-        )}
-
-        {measurementPoints.length === 2 && (
-          <div
-            ref={mapImageRef}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              pointerEvents: "none",
-            }}
-          >
-            <svg
-              width="100%"
-              height="100%"
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                backgroundColor: "rgba(255, 0, 0, 0.1)", // Temporary background to debug visibility
-              }}
-            >
-              <line
-                x1={measurementPoints[0].x - mapOffset.left}
-                y1={measurementPoints[0].y - mapOffset.top}
-                x2={measurementPoints[1].x - mapOffset.left}
-                y2={measurementPoints[1].y - mapOffset.top}
-                stroke="red"
-                strokeWidth="3"
-              />
-            </svg>
           </div>
         )}
       </div>
@@ -558,9 +538,6 @@ const PlayerMap = ({
                         <Toolbar.Button
                           onClick={() => {
                             setIsMeasuring((prev) => !prev);
-                            console.log(
-                              `Measuring mode toggled: ${!isMeasuring}`
-                            );
                           }}
                         >
                           <Icon.Compass boxSize="20px" />

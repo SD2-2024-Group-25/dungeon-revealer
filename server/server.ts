@@ -385,6 +385,33 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     archive.finalize();
   });
 
+  app.get("/api/grid/:mapId", (req, res) => {
+    const { mapId } = req.params;
+    const filePath = path.join(
+      __dirname,
+      "..",
+      "data",
+      "maps",
+      mapId,
+      "settings.json"
+    );
+
+    console.log("Looking for:", filePath);
+
+    fs.readFile(filePath, "utf-8", (err, data) => {
+      if (err) {
+        return res.status(500).json({ error: "Failed to read settings file" });
+      }
+
+      try {
+        const settings = JSON.parse(data);
+        res.json({ grid: settings.grid }); // Assuming the grid data is under a 'grid' key
+      } catch (jsonErr) {
+        res.status(500).json({ error: "Failed to parse JSON" });
+      }
+    });
+  });
+
   apiRouter.post("/save-session/:folderName", (req, res) => {
     const name = req.params.folderName;
     console.log(name);
