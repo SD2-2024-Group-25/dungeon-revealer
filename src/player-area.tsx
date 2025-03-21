@@ -66,7 +66,6 @@ const NoteEditorModal: React.FC<NoteEditorModalProps> = ({ onClose }) => {
   // Load the player's existing notes when the modal opens.
   React.useEffect(() => {
     const savedNotes = localStorage.getItem(noteStorageKey);
-    console.log("Loaded saved notes:", savedNotes);
     if (savedNotes) {
       setNoteContent(savedNotes);
     }
@@ -83,12 +82,6 @@ const NoteEditorModal: React.FC<NoteEditorModalProps> = ({ onClose }) => {
           content: noteContent,
         }),
       });
-
-      if (!response.ok) {
-        console.error("Failed to save notes.");
-      } else {
-        console.log("Notes saved successfully.");
-      }
     } catch (error) {
       console.error("Error saving notes:", error);
     }
@@ -188,12 +181,9 @@ const PlayerMap = ({
   const [measuredDistance, setMeasuredDistance] = React.useState<number | null>(
     null
   );
-  const [gridData, setGridData] = React.useState(null);
 
   const handleMeasureClick = async (x: number, y: number) => {
     if (!isMeasuring) return; // Only process clicks if measuring mode is active
-
-    console.log(currentMap.data?.activeMap?.id);
 
     if (measurementPoints.length === 0) {
       // Store first point
@@ -206,37 +196,54 @@ const PlayerMap = ({
       const deltaY = Math.abs(p2.y - p1.y);
       let distance = Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
 
-      const grid = await fetchGridData();
+      // Load the grid data from settings.json for the current map ID
+      try {
+        const response = await fetch(
+          `/grid/${currentMap.data?.activeMap?.id}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
-      if (grid) {
-        const { columnWidth, columnHeight } = grid;
+        if (response.ok) {
+          const data = await response.json();
 
-        // Convert pixel distance into grid units separately for X and Y
-        const gridX = deltaX / columnWidth;
-        const gridY = deltaY / columnHeight;
+          // Update the local state based on the response
+          setGridData(data.grid);
 
-        // Calculate final grid distance using the Pythagorean theorem
-        distance = Math.sqrt(Math.pow(gridX, 2) + Math.pow(gridY, 2));
+          if (data.grid) {
+            const { columnWidth, columnHeight } = data.grid;
 
-        console.log(`Measured distance: ${distance.toFixed(2)} grid units`);
-      } else {
-        console.log(`Measured distance: ${distance.toFixed(2)} px`);
+            // Convert pixel distance into grid units separately for X and Y
+            const gridX = deltaX / columnWidth;
+            const gridY = deltaY / columnHeight;
+
+            // Calculate final grid distance using the Pythagorean theorem
+            distance = Math.sqrt(Math.pow(gridX, 2) + Math.pow(gridY, 2));
+          }
+        } else {
+          console.error("Failed to update recording state");
+        }
+      } catch (err) {
+        console.error("Error making API request:", err);
       }
 
       setMeasurementPoints([...measurementPoints, p2]);
       setMeasuredDistance(distance);
-      console.log(distance);
     } else {
-      console.log("Resetting measurement");
       // Reset measurement
       setMeasurementPoints([{ x, y }]);
       setMeasuredDistance(null);
     }
   };
 
+  const [gridData, setGridData] = React.useState(false);
+
   React.useEffect(() => {
     if (!isMeasuring) {
-      console.log("Measuring mode OFF - Clearing measurements");
       setMeasurementPoints([]);
       setMeasuredDistance(null);
     }
@@ -285,32 +292,6 @@ const PlayerMap = ({
     return () =>
       window.document.removeEventListener("visibilitychange", listener, false);
   }, []);
-
-  const fetchGridData = React.useCallback(async () => {
-    if (!currentMap.data?.activeMap?.id) return null; // Ensure we have a valid map ID
-    console.log("here");
-
-    try {
-      const response = await fetch(
-        `/api/get-grid?mapId=${currentMap.data.activeMap.id}`
-      );
-      if (!response.ok) throw new Error("Failed to fetch grid data");
-
-      const { grid } = await response.json();
-      return grid; // Returns grid object or null if no grid
-    } catch (error) {
-      console.error("Error fetching grid data:", error);
-      return null;
-    }
-  }, [currentMap]);
-
-  React.useEffect(() => {
-    if (isMeasuring) {
-      fetchGridData().then((data) => setGridData(data));
-    } else {
-      setGridData(null);
-    }
-  }, [isMeasuring, fetchGridData]);
 
   const updateToken = React.useCallback(
     ({ id, ...updates }) => {
@@ -409,7 +390,6 @@ const PlayerMap = ({
               {
                 value: {
                   onMarkArea: ([x, y]) => {
-                    console.log(`Clicked at (${x}, ${y})`);
                     if (isMeasuring) {
                       handleMeasureClick(x, y);
                     } else if (currentMap.data?.activeMap) {
@@ -538,9 +518,6 @@ const PlayerMap = ({
                         <Toolbar.Button
                           onClick={() => {
                             setIsMeasuring((prev) => !prev);
-                            console.log(
-                              `Measuring mode toggled: ${!isMeasuring}`
-                            );
                           }}
                         >
                           <Icon.Compass boxSize="20px" />

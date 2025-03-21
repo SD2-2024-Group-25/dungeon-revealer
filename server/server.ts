@@ -385,50 +385,31 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     archive.finalize();
   });
 
-  const getMapData = async (mapId: any) => {
-    try {
-      // Construct path to settings.json
-      const filePath = path.join(
-        __dirname,
-        "data",
-        "maps",
-        mapId,
-        "settings.json"
-      );
+  app.get("/api/grid/:mapId", (req, res) => {
+    const { mapId } = req.params;
+    const filePath = path.join(
+      __dirname,
+      "..",
+      "data",
+      "maps",
+      mapId,
+      "settings.json"
+    );
 
-      // Read and parse JSON file
-      const fileContent = await fs.readFile(filePath, "utf8");
-      const mapData = JSON.parse(fileContent);
+    console.log("Looking for:", filePath);
 
-      return mapData; // Return full map data (including grid if it exists)
-    } catch (error) {
-      console.error(`Error reading map data for map ID ${mapId}:`, error);
-      return null; // Return null if file is missing or can't be read
-    }
-  };
-
-  // API Route: Get Grid Data for a Map
-  app.get("/api/get-grid", async (req, res) => {
-    console.log("there");
-    try {
-      const { mapId } = req.query;
-      if (!mapId) {
-        return res.status(400).json({ error: "Missing map ID" });
+    fs.readFile(filePath, "utf-8", (err, data) => {
+      if (err) {
+        return res.status(500).json({ error: "Failed to read settings file" });
       }
 
-      // Fetch map data from settings.json
-      const mapData = await getMapData(mapId);
-      if (!mapData) {
-        return res.status(404).json({ error: "Map not found" });
+      try {
+        const settings = JSON.parse(data);
+        res.json({ grid: settings.grid }); // Assuming the grid data is under a 'grid' key
+      } catch (jsonErr) {
+        res.status(500).json({ error: "Failed to parse JSON" });
       }
-
-      // Extract grid data or return null
-      const grid = mapData.grid ?? null;
-      res.json({ grid });
-    } catch (error) {
-      console.error("Error fetching grid data:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
+    });
   });
 
   apiRouter.post("/save-session/:folderName", (req, res) => {
