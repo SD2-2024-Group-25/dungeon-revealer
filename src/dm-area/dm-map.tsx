@@ -611,7 +611,6 @@ const DMMapFragment = graphql`
 interface ModalProps {
   show: boolean;
   onClose: () => void;
-  //added 3/11
   onViewClick?: (sessionname: string) => void;
 }
 
@@ -626,7 +625,7 @@ const DownloadModal: React.FC<ModalProps> = ({
 
   React.useEffect(() => {
     if (show) {
-      // Fetch the list of session folders when the modal is shown
+      //Fetch the list of session folders when the modal is shown
       const fetchSessions = async () => {
         try {
           setLoading(true);
@@ -635,7 +634,7 @@ const DownloadModal: React.FC<ModalProps> = ({
             throw new Error("Failed to fetch session list");
           }
           const data = await response.json();
-          setSessions(data.sessions); // Store the session folder names
+          setSessions(data.sessions); //Store the session folder names
         } catch (error) {
           setError("Failed to load sessions");
           console.error("Error fetching sessions:", error);
@@ -733,7 +732,7 @@ interface ViewModalProps {
   show: boolean;
   onClose: () => void;
   sessionName: string;
-  mapName: string;
+  //mapName: string;
   onSessionSelect: (session: string) => void;
 }
 
@@ -741,7 +740,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
   show,
   onClose,
   sessionName,
-  mapName,
+  //mapName,
   onSessionSelect,
 }) => {
   const [sessions, setSessions] = React.useState<string[]>([]);
@@ -749,6 +748,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const [selectedIteration, setSelectedIteration] = React.useState<
     string | null
   >(null);
+  const [settingsFile, setSettingsFile] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -789,8 +789,15 @@ const ViewModal: React.FC<ViewModalProps> = ({
             throw new Error(`Failed to fetch iterations for ${sessionName}`);
           }
           const data = await response.json();
-          setIterations(data.iterations);
-          setSelectedIteration(data.iterations[0]);
+
+          const filteredIterations = data.iterations.filter(
+            (iteration: string) => iteration.toLowerCase() !== "notes"
+          );
+          setIterations(filteredIterations);
+
+          if (filteredIterations.length > 0) {
+            setSelectedIteration(filteredIterations[0]);
+          }
         } catch (err) {
           console.error("Error fetching iterations:", err);
           setError("Failed to load iterations");
@@ -799,87 +806,180 @@ const ViewModal: React.FC<ViewModalProps> = ({
         }
       };
       fetchIterations();
-      //setSelectedIteration(null); take comment out if you wanna display nothing at first instead of the first in-game action snapshot for that session
     }
   }, [show, sessionName]);
 
   //When the selected iteration changes, fetch settings.json and draw the map with tokens
   React.useEffect(() => {
-    const drawMapWithTokens = async () => {
-      if (!selectedIteration || !sessionName) {
-        console.log("Missing required props for drawing:", {
-          selectedIteration,
-          sessionName,
-        });
-        return;
-      }
-      try {
-        const settingsUrl = `/api/iteration/${sessionName}/${selectedIteration}/settings.json`;
-        console.log("Fetching settings from:", settingsUrl);
-        const settingsResponse = await fetch(settingsUrl);
-        if (!settingsResponse.ok) {
-          throw new Error("Failed to fetch settings.json");
+    if (show && sessionName && selectedIteration) {
+      const drawMapWithTokens = async () => {
+        if (!selectedIteration || !sessionName) {
+          console.log("Missing required props for drawing:", {
+            selectedIteration,
+            sessionName,
+          });
+          return;
         }
-        const settings = await settingsResponse.json();
-        console.log("Fetched settings:", settings);
-
-        const dynamicMapName = settings.mapPath || "map.jpg";
-        const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}/${dynamicMapName}`;
-        console.log("Loading map image from:", mapImageUrl);
-
-        const mapImage = new Image();
-        mapImage.src = mapImageUrl;
-
-        mapImage.onload = () => {
-          const canvas = canvasRef.current;
-          if (!canvas) {
-            console.error("Canvas element is not available.");
-            return;
+        try {
+          const settingsUrl = `/api/iteration/${sessionName}/${selectedIteration}/settings.json`;
+          console.log("Fetching settings from:", settingsUrl);
+          const settingsResponse = await fetch(settingsUrl);
+          if (!settingsResponse.ok) {
+            throw new Error("Failed to fetch settings.json");
           }
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            console.error("Unable to get 2D context from canvas.");
-            return;
-          }
+          const settings = await settingsResponse.json();
+          console.log("Fetched settings:", settings);
 
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
-          console.log("Map image drawn to canvas.");
+          const dynamicMapName = settings.mapPath || "map.jpg";
+          const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}/${dynamicMapName}`;
+          console.log("Loading map image from:", mapImageUrl);
 
-          if (settings.tokens && Array.isArray(settings.tokens)) {
-            settings.tokens.forEach((token: any) => {
+          const mapImage = new Image();
+          mapImage.src = mapImageUrl;
+
+          mapImage.onload = () => {
+            const canvas = canvasRef.current;
+
+            if (!canvas) {
+              console.error("Canvas element is not available.");
+              return;
+            }
+            //creating the canvas so the map can be drawn on
+            const ctx = canvas.getContext("2d");
+
+            if (!ctx) {
+              console.error("Unable to get 2D context from canvas.");
+              return;
+            }
+
+            //clears the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const scale = Math.min(
+              canvas.width / mapImage.naturalWidth,
+              canvas.height / mapImage.naturalHeight
+            );
+
+            //calculate scale factor to maintain aspect ratio
+            const drawWidth = mapImage.naturalWidth * scale;
+            const drawHeight = mapImage.naturalHeight * scale;
+
+            //calculate offsets to center the image in the canvas
+            const offsetX = (canvas.width - drawWidth) / 2;
+            const offsetY = (canvas.height - drawHeight) / 2;
+
+            //save the current context state
+            ctx.save();
+            //translate and scale the canvas so that drawing operations use the iamges original coordinate system
+            ctx.translate(offsetX, offsetY);
+            ctx.scale(scale, scale);
+
+            //drawing the image at its original dimensions
+            ctx.drawImage(
+              mapImage,
+              0,
+              0,
+              mapImage.naturalWidth,
+              mapImage.naturalHeight
+            );
+            console.log("Map image drawn to canvas with transformation.");
+
+            //drawing a grid overlay using the original coordinates
+            const gridSpacing = 50;
+            ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= mapImage.naturalWidth; x += gridSpacing) {
               ctx.beginPath();
-              ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
-              ctx.fillStyle = token.color;
-              ctx.fill();
-              ctx.closePath();
+              ctx.moveTo(x, 0);
+              ctx.lineTo(x, mapImage.naturalHeight);
+              ctx.stroke();
+            }
+            for (let y = 0; y <= mapImage.naturalHeight; y += gridSpacing) {
+              ctx.beginPath();
+              ctx.moveTo(0, y);
+              ctx.lineTo(mapImage.naturalWidth, y);
+              ctx.stroke();
+            }
 
-              if (token.label) {
-                ctx.font = "14px sans-serif";
-                ctx.fillStyle = "#000";
-                ctx.fillText(
-                  token.label,
-                  token.x - token.radius,
-                  token.y - token.radius
-                );
-              }
-            });
-            console.log("Tokens drawn on canvas.");
-          } else {
-            console.log("No tokens found in settings.");
-          }
-        };
+            if (settings.tokens && Array.isArray(settings.tokens)) {
+              settings.tokens.forEach((token: any) => {
+                //if the token contains an image
+                if (token.tokenImageId) {
+                  //if token with image has a label
+                  if (token.label) {
+                    const nonscaledFontSize = 14;
+                    ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "bottom";
 
-        mapImage.onerror = (error) => {
-          console.error("Error loading map image:", error);
-        };
-      } catch (error) {
-        console.error("Error in drawMapWithTokens:", error);
-      }
-    };
+                    const textMetrics = ctx.measureText(token.label);
+                    const textWidth = textMetrics.width;
+                    const textHeight = nonscaledFontSize / scale;
 
-    drawMapWithTokens();
-  }, [selectedIteration, sessionName, mapName]);
+                    ctx.fillStyle = "white";
+                    ctx.fillRect(
+                      token.x - textWidth / 2 - (textWidth * 0.05) / 2,
+                      token.y + (token.radius - textHeight * 0.1),
+                      textWidth + textWidth * 0.05,
+                      textHeight + textHeight * 0.05
+                    );
+
+                    ctx.fillStyle = "#000";
+                    ctx.textAlign = "center";
+                    ctx.fillText(
+                      token.label,
+                      token.x,
+                      token.y +
+                        token.radius +
+                        (token.radius / 2 - textHeight * 0.05)
+                    );
+                  }
+
+                  const tokenImage = new Image();
+                  //tokenImage.src =
+                  //circle for token is created
+                  ctx.beginPath();
+                  ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
+                  ctx.fillStyle = token.color;
+                  ctx.fill();
+                  ctx.closePath();
+                }
+                //if the token doesnt contain an image draw circle only
+                else {
+                  ctx.beginPath();
+                  ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
+                  ctx.fillStyle = token.color;
+                  ctx.fill();
+                  ctx.closePath();
+
+                  if (token.label) {
+                    const nonscaledFontSize = 14;
+                    ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
+                    ctx.fillStyle = "#000";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(token.label, token.x, token.y);
+                  }
+                }
+              });
+              console.log("Tokens drawn on canvas.");
+            } else {
+              console.log("No tokens found in settings.");
+            }
+
+            ctx.restore();
+          };
+
+          mapImage.onerror = (error) => {
+            console.error("Error loading map image:", error);
+          };
+        } catch (error) {
+          console.error("Error in drawMapWithTokens:", error);
+        }
+      };
+      drawMapWithTokens();
+    }
+  }, [show, selectedIteration, sessionName]);
 
   if (!show) return null;
 

@@ -247,6 +247,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
+  //retrieves map file for a specific iteration
   apiRouter.get(
     "/iteration/:sessionName/:iterationName/:map",
     async (req, res) => {
@@ -260,8 +261,6 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
         "map.jpg"
       );
 
-      console.log("Serving map.jpg from:", mapFilePath);
-
       if (!fs.existsSync(mapFilePath)) {
         console.error("File not found:", mapFilePath);
         return res.status(404).json({ error: "map.jpg not found" });
@@ -271,6 +270,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   );
 
+  //retrieves settings.json for a specific iteration
   app.get(
     "/api/iteration/:sessionName/:iterationName/settings.json",
     (req, res) => {
@@ -284,7 +284,6 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
         "settings.json"
       );
       res.setHeader("Content-Type", "application/json");
-      res.sendFile(settingsPath);
       res.sendFile(settingsPath);
     }
   );
