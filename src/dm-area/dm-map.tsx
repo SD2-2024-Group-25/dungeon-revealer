@@ -1275,6 +1275,7 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
   const [currentIteration, setCurrentIteration] = React.useState<number>(1);
   const [iterationNames, setIterationNames] = React.useState<string[]>([]);
   const [selectedTokens, setSelectedTokens] = React.useState<string[]>([]);
+  const [showCenter, setShowCenter] = React.useState<boolean>(true);
 
   // Grab the token data from all iterations
   React.useEffect(() => {
@@ -1500,7 +1501,8 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
         .attr("fill", token.color);
     });
 
-    if (center) {
+    // Centerpoint
+    if (showCenter && center) {
       svg
         .append("circle")
         .attr("cx", xScale(center.x))
@@ -1545,6 +1547,8 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
     bgDimensions,
     currentIteration,
     selectedTokens,
+    center,
+    showCenter,
   ]);
 
   // togglable selection of tokens
@@ -1571,6 +1575,22 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
           height: "100%",
         }}
       >
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            marginBottom: "10px",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={showCenter}
+            onChange={() => setShowCenter((prev) => !prev)}
+            style={{ marginRight: "5px" }}
+          />
+          Center
+        </label>
+
         <h3 style={{ marginTop: 0 }}>Tokens</h3>
         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
           {tokenIds.map((tokenId) => (
@@ -1637,7 +1657,7 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
         }}
       >
         <h3 style={{ marginTop: 0 }}>Center Point</h3>
-        {center ? (
+        {showCenter && center ? (
           <div style={{ marginBottom: "15px" }}>
             <p>
               X: {center.x.toFixed(2)} <strong>|</strong> Y:{" "}
