@@ -1371,6 +1371,25 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
       .map((pt: any) => ({ x: +pt.x, y: +pt.y }));
   }, [tokenData, selectedTokens, currentIteration]);
 
+  const center = React.useMemo(() => {
+    // Averages the x and y to find center coords
+    if (selectedPositions.length === 0) {
+      return null;
+    }
+
+    const average = selectedPositions.reduce(
+      (acc, pt) => ({
+        x: acc.x + pt.x,
+        y: acc.y + pt.y,
+      }),
+      { x: 0, y: 0 }
+    );
+    return {
+      x: average.x / selectedPositions.length,
+      y: average.y / selectedPositions.length,
+    };
+  }, [selectedPositions]);
+
   // Create the graph
   React.useEffect(() => {
     if (
@@ -1481,6 +1500,25 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
         .attr("fill", token.color);
     });
 
+    if (center) {
+      svg
+        .append("circle")
+        .attr("cx", xScale(center.x))
+        .attr("cy", yScale(center.y))
+        .attr("r", 10)
+        .attr("fill", "yellow")
+        .attr("stroke", "black")
+        .attr("stroke-width", 2);
+
+      svg
+        .append("text")
+        .attr("x", xScale(center.x))
+        .attr("y", yScale(center.y) - 15)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "12px")
+        .attr("fill", "black")
+        .text("Center");
+    }
     // Creates a legend in top-left
     const legend = svg.append("g").attr("transform", "translate(10,10)");
     selectedTokens.forEach((tokenId, i) => {
@@ -1598,6 +1636,17 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
           height: "100%",
         }}
       >
+        <h3 style={{ marginTop: 0 }}>Center Point</h3>
+        {center ? (
+          <div style={{ marginBottom: "15px" }}>
+            <p>
+              X: {center.x.toFixed(2)} <strong>|</strong> Y:{" "}
+              {center.y.toFixed(2)}
+            </p>
+          </div>
+        ) : (
+          <p style={{ marginBottom: "15px" }}>N/A</p>
+        )}
         <h3 style={{ marginTop: 0 }}>Distances</h3>
         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
           {pairDistances.map((pd) => (
