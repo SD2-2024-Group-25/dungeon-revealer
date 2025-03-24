@@ -231,7 +231,6 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
-  //just added
   apiRouter.get("/list-iterations/:folder", async (req, res) => {
     const folderName = req.params.folder; // Dynamically get folder name
     const targetFolderPath = path.join(researchPath, "saved", folderName);
@@ -258,8 +257,9 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
+  //retrieves map file for a specific iteration
   apiRouter.get(
-    "/iteration/:sessionName/:iterationName/map.png",
+    "/iteration/:sessionName/:iterationName/:map",
     async (req, res) => {
       const { sessionName, iterationName } = req.params;
 
@@ -271,14 +271,30 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
         "map.png"
       );
 
-      console.log("Serving map.jpg from:", mapFilePath); // Log the file path
-
       if (!fs.existsSync(mapFilePath)) {
         console.error("File not found:", mapFilePath);
         return res.status(404).json({ error: "map.jpg not found" });
       }
 
       res.sendFile(mapFilePath);
+    }
+  );
+
+  //retrieves settings.json for a specific iteration
+  app.get(
+    "/api/iteration/:sessionName/:iterationName/settings.json",
+    (req, res) => {
+      const { sessionName, iterationName } = req.params;
+
+      const settingsPath = path.join(
+        researchPath,
+        "saved",
+        sessionName,
+        iterationName,
+        "settings.json"
+      );
+      res.setHeader("Content-Type", "application/json");
+      res.sendFile(settingsPath);
     }
   );
 
@@ -383,6 +399,33 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     archive.finalize();
   });
 
+  app.get("/api/grid/:mapId", (req, res) => {
+    const { mapId } = req.params;
+    const filePath = path.join(
+      __dirname,
+      "..",
+      "data",
+      "maps",
+      mapId,
+      "settings.json"
+    );
+
+    console.log("Looking for:", filePath);
+
+    fs.readFile(filePath, "utf-8", (err, data) => {
+      if (err) {
+        return res.status(500).json({ error: "Failed to read settings file" });
+      }
+
+      try {
+        const settings = JSON.parse(data);
+        res.json({ grid: settings.grid }); // Assuming the grid data is under a 'grid' key
+      } catch (jsonErr) {
+        res.status(500).json({ error: "Failed to parse JSON" });
+      }
+    });
+  });
+
   apiRouter.post("/save-session/:folderName", (req, res) => {
     const name = req.params.folderName;
     console.log(name);
@@ -429,12 +472,14 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
         fs.mkdirSync(savedPath, { recursive: true });
       }
 
+      renameNotesFiles(sourceNotesFolder);
+
       copyFolderRecursive(sourceSessionFolder, destinationFolder);
 
       createSessionCSV(sourceSessionFolder, destinationFolder);
 
       copyFolderRecursive(sourceNotesFolder, destinationNotesFolder);
-      copyFolderRecursive(sourceNotesFolder, destinationWhiteboardFolder);
+      copyFolderRecursive(sourceWhiteboardFolder, destinationWhiteboardFolder);
 
       deleteFolderContents(sourceSessionFolder);
       deleteFolderContents(sourceNotesFolder);
@@ -607,6 +652,38 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   }
 
+  function renameNotesFiles(notesFolderPath: string) {
+    if (!fs.existsSync(notesFolderPath)) return;
+
+    const files = fs.readdirSync(notesFolderPath);
+
+    files.forEach((file) => {
+      const filePath = path.join(notesFolderPath, file);
+      if (fs.statSync(filePath).isFile() && file.endsWith(".txt")) {
+        let content = fs.readFileSync(filePath, "utf8");
+
+        // Extract userName
+        const match = content.match(/^User:\s*(.+)$/m);
+        if (match) {
+          const userName = match[1].trim().replace(/[^a-zA-Z0-9-_]/g, "_");
+          const newFileName = `${userName}_notes.txt`;
+          const newFilePath = path.join(notesFolderPath, newFileName);
+
+          content = content.replace(/^User:\s*.+\n?/, "").trimStart();
+
+          // Rename and overwrite the file
+          fs.writeFileSync(filePath, content, "utf8");
+
+          // Rename file
+          if (!fs.existsSync(newFilePath)) {
+            fs.renameSync(filePath, newFilePath);
+            console.log(`Renamed and cleaned: ${file} → ${newFileName}`);
+          }
+        }
+      }
+    });
+  }
+
   const { router: mapsRouter } = createMapRouter({
     roleMiddleware,
     maps,
@@ -696,6 +773,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
   const authenticatedSockets = new Set();
 
+  let currentCollaborationLink: string | null = null;
+
   io.on("connection", (socket) => {
     console.log(`WS client ${socket.handshake.address} ${socket.id} connected`);
 
@@ -706,7 +785,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
     socket.on("authenticate", ({ password, desiredRole }) => {
       socketIOGraphQLServer.disposeSocket(socket);
-      socket.removeAllListeners();
+      // TODO: NEED TO MAKE SURE THIS DOESNT BREAK THINGS
+      //socket.removeAllListeners();
 
       const role = getRole(password);
       if (role === null) {
@@ -728,8 +808,22 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
       socketIOGraphQLServer.registerSocket(socket);
 
+      socket.on("update-collaboration-link", (payload: { link: string }) => {
+        // Update the server's current link
+        currentCollaborationLink = payload.link;
+        // Broadcast to all clients
+        io.emit("collaboration-link-updated", { link: payload.link });
+      });
+
       socket.emit("authenticated");
     });
+
+    // Send the current collaboration link to the new client upon connection
+    if (currentCollaborationLink) {
+      socket.emit("collaboration-link-updated", {
+        link: currentCollaborationLink,
+      });
+    }
 
     socket.once("disconnect", function () {
       authenticatedSockets.delete(socket);

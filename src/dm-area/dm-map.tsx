@@ -1,4 +1,5 @@
 import * as React from "react";
+import * as userSession from "../chat/user-session";
 import styled from "@emotion/styled/macro";
 import * as io from "io-ts";
 import { pipe, identity } from "fp-ts/function";
@@ -97,6 +98,7 @@ import { IsDungeonMasterContext } from "../is-dungeon-master-context";
 import { LazyLoadedMapView } from "../lazy-loaded-map-view";
 import { typeFromAST } from "graphql";
 import { position } from "polished";
+import { useSocket } from "../socket";
 import * as d3 from "d3";
 
 type ToolMapRecord = {
@@ -612,7 +614,6 @@ const DMMapFragment = graphql`
 interface ModalProps {
   show: boolean;
   onClose: () => void;
-  //added 3/11
   onViewClick?: (sessionname: string) => void;
 }
 
@@ -627,7 +628,7 @@ const DownloadModal: React.FC<ModalProps> = ({
 
   React.useEffect(() => {
     if (show) {
-      // Fetch the list of session folders when the modal is shown
+      //Fetch the list of session folders when the modal is shown
       const fetchSessions = async () => {
         try {
           setLoading(true);
@@ -636,7 +637,7 @@ const DownloadModal: React.FC<ModalProps> = ({
             throw new Error("Failed to fetch session list");
           }
           const data = await response.json();
-          setSessions(data.sessions); // Store the session folder names
+          setSessions(data.sessions); //Store the session folder names
         } catch (error) {
           setError("Failed to load sessions");
           console.error("Error fetching sessions:", error);
@@ -734,6 +735,7 @@ interface ViewModalProps {
   show: boolean;
   onClose: () => void;
   sessionName: string;
+  //mapName: string;
   onSessionSelect: (session: string) => void;
 }
 
@@ -741,6 +743,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
   show,
   onClose,
   sessionName,
+  //mapName,
   onSessionSelect,
 }) => {
   const [sessions, setSessions] = React.useState<string[]>([]);
@@ -748,6 +751,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const [selectedIteration, setSelectedIteration] = React.useState<
     string | null
   >(null);
+  const [settingsFile, setSettingsFile] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -757,6 +761,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const [showMovementModal, setShowMovementModal] = React.useState(false);
   const [isHerdModalOpen, setIsHerdModalOpen] = React.useState<boolean>(false);
   const [showHerdModal, setShowHerdModal] = React.useState(false);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
   // Fetch sessions if modal is shown and no session is selected
   React.useEffect(() => {
@@ -792,7 +797,15 @@ const ViewModal: React.FC<ViewModalProps> = ({
             throw new Error(`Failed to fetch iterations for ${sessionName}`);
           }
           const data = await response.json();
-          setIterations(data.iterations);
+
+          const filteredIterations = data.iterations.filter(
+            (iteration: string) => iteration.toLowerCase() !== "notes"
+          );
+          setIterations(filteredIterations);
+
+          if (filteredIterations.length > 0) {
+            setSelectedIteration(filteredIterations[0]);
+          }
         } catch (err) {
           console.error("Error fetching iterations:", err);
           setError("Failed to load iterations");
@@ -801,9 +814,180 @@ const ViewModal: React.FC<ViewModalProps> = ({
         }
       };
       fetchIterations();
-      setSelectedIteration(null);
     }
   }, [show, sessionName]);
+
+  //When the selected iteration changes, fetch settings.json and draw the map with tokens
+  React.useEffect(() => {
+    if (show && sessionName && selectedIteration) {
+      const drawMapWithTokens = async () => {
+        if (!selectedIteration || !sessionName) {
+          console.log("Missing required props for drawing:", {
+            selectedIteration,
+            sessionName,
+          });
+          return;
+        }
+        try {
+          const settingsUrl = `/api/iteration/${sessionName}/${selectedIteration}/settings.json`;
+          console.log("Fetching settings from:", settingsUrl);
+          const settingsResponse = await fetch(settingsUrl);
+          if (!settingsResponse.ok) {
+            throw new Error("Failed to fetch settings.json");
+          }
+          const settings = await settingsResponse.json();
+          console.log("Fetched settings:", settings);
+
+          const dynamicMapName = settings.mapPath || "map.jpg";
+          const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}/${dynamicMapName}`;
+          console.log("Loading map image from:", mapImageUrl);
+
+          const mapImage = new Image();
+          mapImage.src = mapImageUrl;
+
+          mapImage.onload = () => {
+            const canvas = canvasRef.current;
+
+            if (!canvas) {
+              console.error("Canvas element is not available.");
+              return;
+            }
+            //creating the canvas so the map can be drawn on
+            const ctx = canvas.getContext("2d");
+
+            if (!ctx) {
+              console.error("Unable to get 2D context from canvas.");
+              return;
+            }
+
+            //clears the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const scale = Math.min(
+              canvas.width / mapImage.naturalWidth,
+              canvas.height / mapImage.naturalHeight
+            );
+
+            //calculate scale factor to maintain aspect ratio
+            const drawWidth = mapImage.naturalWidth * scale;
+            const drawHeight = mapImage.naturalHeight * scale;
+
+            //calculate offsets to center the image in the canvas
+            const offsetX = (canvas.width - drawWidth) / 2;
+            const offsetY = (canvas.height - drawHeight) / 2;
+
+            //save the current context state
+            ctx.save();
+            //translate and scale the canvas so that drawing operations use the iamges original coordinate system
+            ctx.translate(offsetX, offsetY);
+            ctx.scale(scale, scale);
+
+            //drawing the image at its original dimensions
+            ctx.drawImage(
+              mapImage,
+              0,
+              0,
+              mapImage.naturalWidth,
+              mapImage.naturalHeight
+            );
+            console.log("Map image drawn to canvas with transformation.");
+
+            //drawing a grid overlay using the original coordinates
+            const gridSpacing = 50;
+            ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= mapImage.naturalWidth; x += gridSpacing) {
+              ctx.beginPath();
+              ctx.moveTo(x, 0);
+              ctx.lineTo(x, mapImage.naturalHeight);
+              ctx.stroke();
+            }
+            for (let y = 0; y <= mapImage.naturalHeight; y += gridSpacing) {
+              ctx.beginPath();
+              ctx.moveTo(0, y);
+              ctx.lineTo(mapImage.naturalWidth, y);
+              ctx.stroke();
+            }
+
+            if (settings.tokens && Array.isArray(settings.tokens)) {
+              settings.tokens.forEach((token: any) => {
+                //if the token contains an image
+                if (token.tokenImageId) {
+                  //if token with image has a label
+                  if (token.label) {
+                    const nonscaledFontSize = 14;
+                    ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "bottom";
+
+                    const textMetrics = ctx.measureText(token.label);
+                    const textWidth = textMetrics.width;
+                    const textHeight = nonscaledFontSize / scale;
+
+                    ctx.fillStyle = "white";
+                    ctx.fillRect(
+                      token.x - textWidth / 2 - (textWidth * 0.05) / 2,
+                      token.y + (token.radius - textHeight * 0.1),
+                      textWidth + textWidth * 0.05,
+                      textHeight + textHeight * 0.05
+                    );
+
+                    ctx.fillStyle = "#000";
+                    ctx.textAlign = "center";
+                    ctx.fillText(
+                      token.label,
+                      token.x,
+                      token.y +
+                        token.radius +
+                        (token.radius / 2 - textHeight * 0.05)
+                    );
+                  }
+
+                  const tokenImage = new Image();
+                  //tokenImage.src =
+                  //circle for token is created
+                  ctx.beginPath();
+                  ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
+                  ctx.fillStyle = token.color;
+                  ctx.fill();
+                  ctx.closePath();
+                }
+                //if the token doesnt contain an image draw circle only
+                else {
+                  ctx.beginPath();
+                  ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
+                  ctx.fillStyle = token.color;
+                  ctx.fill();
+                  ctx.closePath();
+
+                  if (token.label) {
+                    const nonscaledFontSize = 14;
+                    ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
+                    ctx.fillStyle = "#000";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(token.label, token.x, token.y);
+                  }
+                }
+              });
+              console.log("Tokens drawn on canvas.");
+            } else {
+              console.log("No tokens found in settings.");
+            }
+
+            ctx.restore();
+          };
+
+          mapImage.onerror = (error) => {
+            console.error("Error loading map image:", error);
+          };
+        } catch (error) {
+          console.error("Error in drawMapWithTokens:", error);
+        }
+      };
+      drawMapWithTokens();
+    }
+  }, [show, selectedIteration, sessionName]);
 
   if (!show) return null;
 
@@ -921,6 +1105,16 @@ const ViewModal: React.FC<ViewModalProps> = ({
                 {selectedIteration ? (
                   <>
                     <h3>{selectedIteration}</h3>
+                    <canvas
+                      ref={canvasRef}
+                      width={800}
+                      height={600}
+                      style={{
+                        maxWidth: "100%",
+                        height: "calc(100% - 40px)",
+                        objectFit: "contain",
+                      }}
+                    />
                   </>
                 ) : (
                   <p>Please select an iteration</p>
@@ -929,15 +1123,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
             ) : (
               <p>Please select a session</p>
             )}
-            <img
-              src={`/api/iteration/${sessionName}/${selectedIteration}/map.png`}
-              alt="Map"
-              style={{
-                maxWidth: "100%",
-                height: "calc(100% - 40px)",
-                objectFit: "contain",
-              }}
-            />
           </div>
         </div>
         <button onClick={onClose} style={viewCloseButtonStyle}>
@@ -1914,7 +2099,7 @@ const modalStyle: React.CSSProperties = {
 const listContainerStyle: React.CSSProperties = {
   maxHeight: "200px", // Set a max height for the list container
   overflowY: "auto", // Enable scrolling within the list container
-  marginBottom: "10px", // Optional: Add space at the bottom of the list
+  marginBottom: "10px",
 };
 
 const buttonStyle: React.CSSProperties = {
@@ -2138,6 +2323,90 @@ export const DmMap = (props: {
     );
     setSelectedSessionName(sessionName);
     setViewModalOpen(true);
+  };
+
+  const [isIframeOpen, setIsIframeOpen] = React.useState(false);
+  const [iframeUrl, setIframeUrl] = React.useState<string | null>(null);
+
+  const socket = useSocket();
+
+  React.useEffect(() => {
+    // authenticate:
+    socket.emit("authenticate", {
+      password: "SUPER_SECRET_DM_PASSWORD",
+      desiredRole: "dm",
+    });
+
+    // Optionally listen for "authenticated"
+    socket.on("authenticated", () => {
+      console.log(
+        "Socket is authenticated. Now can send events like update-collaboration-link"
+      );
+    });
+
+    return () => {
+      socket.off("authenticated");
+    };
+  }, [socket]);
+  //const [collabLink, setCollabLink] = React.useState<string | null>(null);
+  const [collabLink, setCollabLink] = React.useState<string>(
+    import.meta.env.VITE_EXCALIDRAW_URL
+  );
+  // Optionally, on mount load initial value from localStorage:
+  React.useEffect(() => {
+    setCollabLink(localStorage.getItem("collaborationLink"));
+  }, []);
+
+  React.useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "UPDATE_COLLABORATION_LINK") {
+        const { link } = event.data.payload;
+        setCollabLink(link);
+        localStorage.setItem("collaborationLink", link);
+        // also broadcast to server
+        socket.emit("update-collaboration-link", { link });
+      }
+      // handle "OPEN_EXCALIDRAW" if you want here
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [socket]);
+
+  React.useEffect(() => {
+    const handleSocketEvent = ({ link }: { link: string }) => {
+      setCollabLink(link);
+      localStorage.setItem("collaborationLink", link);
+    };
+
+    socket.on("collaboration-link-updated", handleSocketEvent);
+    return () => socket.off("collaboration-link-updated", handleSocketEvent);
+  }, [socket]);
+
+  const openExcalidraw = () => {
+    try {
+      const user = userSession.getUser();
+      if (!user) throw new Error("User data not available");
+
+      // Use the saved collaboration link if available, or the default URL
+      const baseUrl = collabLink || import.meta.env.VITE_EXCALIDRAW_URL;
+      const url = new URL(baseUrl);
+
+      // Append user info as query parameters
+      url.searchParams.set("username", user.name);
+      url.searchParams.set("userID", user.id);
+
+      // If a saved collaboration link exists, preserve its hash
+      if (collabLink) {
+        const collabUrl = new URL(collabLink);
+        url.hash = collabUrl.hash;
+      }
+
+      console.log("Opening Excalidraw URL:", url.toString());
+      setIframeUrl(url.toString());
+      setIsIframeOpen(true);
+    } catch (error) {
+      console.error("Error opening drawing:", error);
+    }
   };
 
   return (
@@ -2374,6 +2643,12 @@ export const DmMap = (props: {
                   </Toolbar.Button>
                 </Toolbar.Item>
                 <Toolbar.Item isActive>
+                  <Toolbar.Button onClick={openExcalidraw}>
+                    <Icon.Drawing boxSize="20px" />
+                    <Icon.Label>Drawing</Icon.Label>
+                  </Toolbar.Button>
+                </Toolbar.Item>
+                <Toolbar.Item isActive>
                   <Toolbar.Button
                     onClick={() => {
                       props.openNotes();
@@ -2478,6 +2753,46 @@ export const DmMap = (props: {
         />
       )}
       {confirmDialogNode}
+      {isIframeOpen && iframeUrl && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "20px",
+              borderRadius: "8px",
+              width: "90%",
+              height: "90%",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <button
+              onClick={() => setIsIframeOpen(false)}
+              style={{ alignSelf: "flex-end", marginBottom: "10px" }}
+            >
+              Close
+            </button>
+            <iframe
+              src={iframeUrl}
+              style={{ flex: 1, border: "none", borderRadius: "4px" }}
+              title="Embedded Content"
+            />
+          </div>
+        </div>
+      )}
       <SharedTokenMenu currentMapId={map.id} />
       <ContextMenuRenderer map={map} />
     </FlatContextProvider>

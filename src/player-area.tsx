@@ -66,7 +66,6 @@ const NoteEditorModal: React.FC<NoteEditorModalProps> = ({ onClose }) => {
   // Load the player's existing notes when the modal opens.
   React.useEffect(() => {
     const savedNotes = localStorage.getItem(noteStorageKey);
-    console.log("Loaded saved notes:", savedNotes);
     if (savedNotes) {
       setNoteContent(savedNotes);
     }
@@ -83,12 +82,6 @@ const NoteEditorModal: React.FC<NoteEditorModalProps> = ({ onClose }) => {
           content: noteContent,
         }),
       });
-
-      if (!response.ok) {
-        console.error("Failed to save notes.");
-      } else {
-        console.log("Notes saved successfully.");
-      }
     } catch (error) {
       console.error("Error saving notes:", error);
     }
@@ -181,6 +174,81 @@ const PlayerMap = ({
   const controlRef = React.useRef<MapControlInterface | null>(null);
   const [markedAreas, setMarkedAreas] = React.useState<MarkedArea[]>(() => []);
 
+  const [isMeasuring, setIsMeasuring] = React.useState(false);
+  const [measurementPoints, setMeasurementPoints] = React.useState<
+    { x: number; y: number }[]
+  >([]);
+  const [measuredDistance, setMeasuredDistance] = React.useState<number | null>(
+    null
+  );
+
+  const handleMeasureClick = async (x: number, y: number) => {
+    if (!isMeasuring) return; // Only process clicks if measuring mode is active
+
+    if (measurementPoints.length === 0) {
+      // Store first point
+      setMeasurementPoints([{ x, y }]);
+    } else if (measurementPoints.length === 1) {
+      // Store second point and calculate distance
+      const p1 = measurementPoints[0];
+      const p2 = { x, y };
+      const deltaX = Math.abs(p2.x - p1.x);
+      const deltaY = Math.abs(p2.y - p1.y);
+      let distance = Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
+
+      // Load the grid data from settings.json for the current map ID
+      try {
+        const response = await fetch(
+          `/grid/${currentMap.data?.activeMap?.id}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+
+          // Update the local state based on the response
+          setGridData(data.grid);
+
+          if (data.grid) {
+            const { columnWidth, columnHeight } = data.grid;
+
+            // Convert pixel distance into grid units separately for X and Y
+            const gridX = deltaX / columnWidth;
+            const gridY = deltaY / columnHeight;
+
+            // Calculate final grid distance using the Pythagorean theorem
+            distance = Math.sqrt(Math.pow(gridX, 2) + Math.pow(gridY, 2));
+          }
+        } else {
+          console.error("Failed to update recording state");
+        }
+      } catch (err) {
+        console.error("Error making API request:", err);
+      }
+
+      setMeasurementPoints([...measurementPoints, p2]);
+      setMeasuredDistance(distance);
+    } else {
+      // Reset measurement
+      setMeasurementPoints([{ x, y }]);
+      setMeasuredDistance(null);
+    }
+  };
+
+  const [gridData, setGridData] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isMeasuring) {
+      setMeasurementPoints([]);
+      setMeasuredDistance(null);
+    }
+  }, [isMeasuring]);
+
   // Collaboration link management
   const saveCollaborationLink = (link: string) => {
     localStorage.setItem("collaborationLink", link);
@@ -191,20 +259,40 @@ const PlayerMap = ({
     localStorage.removeItem("collaborationLink");
   };
 
+  //const [collabLink, setCollabLink] = React.useState<string | null>(null);
+  const [collabLink, setCollabLink] = React.useState<string>(
+    import.meta.env.VITE_EXCALIDRAW_URL
+  );
+  // Optionally, on mount load initial value from localStorage:
+  React.useEffect(() => {
+    setCollabLink(localStorage.getItem("collaborationLink"));
+  }, []);
+
   React.useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.data.type === "UPDATE_COLLABORATION_LINK") {
+      if (event.data?.type === "UPDATE_COLLABORATION_LINK") {
         const { link } = event.data.payload;
-        if (link) {
-          saveCollaborationLink(link);
-        } else {
-          clearCollaborationLink();
-        }
+        setCollabLink(link);
+        localStorage.setItem("collaborationLink", link);
+        // also broadcast to server
+        socket.emit("update-collaboration-link", { link });
       }
+      // handle "OPEN_EXCALIDRAW" if you want here
     };
+
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  }, [socket]);
+
+  React.useEffect(() => {
+    const handleSocketEvent = ({ link }: { link: string }) => {
+      setCollabLink(link);
+      localStorage.setItem("collaborationLink", link);
+    };
+
+    socket.on("collaboration-link-updated", handleSocketEvent);
+    return () => socket.off("collaboration-link-updated", handleSocketEvent);
+  }, [socket]);
 
   React.useEffect(() => {
     const contextmenuListener = (ev: Event) => {
@@ -302,7 +390,15 @@ const PlayerMap = ({
     }
   );
 
-  const noteWindowActions = useNoteWindowActions();
+  const mapImageRef = React.useRef<HTMLDivElement | null>(null);
+  const [mapOffset, setMapOffset] = React.useState({ left: 0, top: 0 });
+
+  React.useEffect(() => {
+    if (mapImageRef.current) {
+      const rect = mapImageRef.current.getBoundingClientRect();
+      setMapOffset({ left: rect.left, top: rect.top });
+    }
+  }, [currentMap.data?.activeMap]);
 
   return (
     <>
@@ -314,7 +410,9 @@ const PlayerMap = ({
               {
                 value: {
                   onMarkArea: ([x, y]) => {
-                    if (currentMap.data?.activeMap) {
+                    if (isMeasuring) {
+                      handleMeasureClick(x, y);
+                    } else if (currentMap.data?.activeMap) {
                       mapPing({
                         variables: {
                           input: {
@@ -358,6 +456,27 @@ const PlayerMap = ({
             </React.Suspense>
           ) : null}
         </FlatContextProvider>
+
+        {measurementPoints.length === 2 && measuredDistance !== null && (
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "10px",
+              background: "white",
+              padding: "5px 10px",
+              borderRadius: "5px",
+              fontSize: "14px",
+              fontWeight: "bold",
+              transform: "translateX(-50%)", // Center the text horizontally
+              pointerEvents: "none",
+              zIndex: 1000, // Ensure it stays on top
+              boxShadow: "0px 2px 5px rgba(0,0,0,0.2)", // Optional styling for visibility
+            }}
+          >
+            {measuredDistance.toFixed(2)} units
+          </div>
+        )}
       </div>
       {!showSplashScreen ? (
         isMapOnly ? null : (
@@ -415,6 +534,19 @@ const PlayerMap = ({
                           <Icon.Label>Zoom Out</Icon.Label>
                         </Toolbar.LongPressButton>
                       </Toolbar.Item>
+                      <Toolbar.Item isActive={isMeasuring}>
+                        <Toolbar.Button
+                          onClick={() => {
+                            setIsMeasuring((prev) => !prev);
+                          }}
+                        >
+                          <Icon.Compass boxSize="20px" />
+                          <Icon.Label>
+                            {isMeasuring ? "Measuring: On" : "Measure Distance"}
+                          </Icon.Label>
+                        </Toolbar.Button>
+                      </Toolbar.Item>
+
                       <Toolbar.Item isActive>
                         <Toolbar.LongPressButton
                           onClick={() => {
@@ -430,19 +562,29 @@ const PlayerMap = ({
                           onClick={() => {
                             try {
                               const user = userSession.getUser();
-                              if (!user) {
+                              if (!user)
                                 throw new Error("User data not available");
-                              }
-                              const excalidrawUrl = import.meta.env
-                                .VITE_EXCALIDRAW_URL;
-                              const url = new URL(excalidrawUrl);
-                              url.searchParams.append("username", user.name);
-                              url.searchParams.append("userID", user.id);
-                              const savedCollabLink = getCollaborationLink();
-                              if (savedCollabLink) {
-                                const collabUrl = new URL(savedCollabLink);
+
+                              // Use the saved collaboration link if available, or the default URL
+                              const baseUrl =
+                                collabLink ||
+                                import.meta.env.VITE_EXCALIDRAW_URL;
+                              const url = new URL(baseUrl);
+
+                              // Append user info as query parameters
+                              url.searchParams.set("username", user.name);
+                              url.searchParams.set("userID", user.id);
+
+                              // If a saved collaboration link exists, preserve its hash
+                              if (collabLink) {
+                                const collabUrl = new URL(collabLink);
                                 url.hash = collabUrl.hash;
                               }
+
+                              console.log(
+                                "Opening Excalidraw URL:",
+                                url.toString()
+                              );
                               setIframeUrl(url.toString());
                               setIsIframeOpen(true);
                             } catch (error) {
