@@ -99,6 +99,7 @@ import { LazyLoadedMapView } from "../lazy-loaded-map-view";
 import { typeFromAST } from "graphql";
 import { position } from "polished";
 import { useSocket } from "../socket";
+import * as d3 from "d3";
 
 type ToolMapRecord = {
   name: string;
@@ -755,6 +756,11 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const [error, setError] = React.useState<string | null>(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState<boolean>(true);
+  const [isMovementModalOpen, setIsMovementModalOpen] =
+    React.useState<boolean>(false);
+  const [showMovementModal, setShowMovementModal] = React.useState(false);
+  const [isHerdModalOpen, setIsHerdModalOpen] = React.useState<boolean>(false);
+  const [showHerdModal, setShowHerdModal] = React.useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
   // Fetch sessions if modal is shown and no session is selected
@@ -988,6 +994,36 @@ const ViewModal: React.FC<ViewModalProps> = ({
   return (
     <div style={viewModalOverlayStyle}>
       <div style={viewModalStyle}>
+        {/* Button that opens the movement graph */}
+        <button
+          onClick={() => setShowMovementModal(true)}
+          style={{
+            position: "absolute",
+            left: "85%",
+            top: "10px",
+            cursor: "pointer",
+            border: "2px solid #ccc",
+            padding: "5px",
+          }}
+        >
+          {isMovementModalOpen ? "Open Movement Graph" : "Open Movement Graph"}
+        </button>
+
+        {/* Button that opens herd graph */}
+        <button
+          onClick={() => setShowHerdModal(true)}
+          style={{
+            position: "absolute",
+            left: "85%",
+            top: "50px",
+            cursor: "pointer",
+            border: "2px solid #ccc",
+            padding: "5px",
+          }}
+        >
+          {isHerdModalOpen ? "Open Herd Graph" : "Open Herd Graph"}
+        </button>
+
         {/* A button to toggle the sidebar */}
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -1093,6 +1129,819 @@ const ViewModal: React.FC<ViewModalProps> = ({
           Close
         </button>
       </div>
+      {showMovementModal && (
+        <MovementGraphModal
+          show={showMovementModal}
+          onClose={() => setShowMovementModal(false)}
+          sessionName={sessionName}
+        />
+      )}
+      {showHerdModal && (
+        <HerdGraphModal
+          show={showHerdModal}
+          onClose={() => setShowHerdModal(false)}
+          sessionName={sessionName}
+        />
+      )}
+    </div>
+  );
+};
+
+interface MovementGraphModalProps {
+  show: boolean;
+  onClose: () => void;
+  sessionName: string;
+}
+
+const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
+  show,
+  onClose,
+  sessionName,
+}) => {
+  const svgRef = React.useRef<HTMLDivElement>(null);
+  const [tokenData, setTokenData] = React.useState<any>(null);
+  const [backgroundImage, setBackgroundImage] = React.useState<string | null>(
+    null
+  );
+  const [bgDimensions, setBgDimensions] = React.useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const [currentIteration, setCurrentIteration] = React.useState<number>(1);
+  const [iterationNames, setIterationNames] = React.useState<string[]>([]);
+
+  // Grab the token data from all iterations
+  React.useEffect(() => {
+    if (show && sessionName) {
+      const fetchVisualizationData = async () => {
+        try {
+          const response = await fetch(`/api/grabIterationData/visualData`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionName }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch visualization data");
+          }
+
+          const json = await response.json();
+          setTokenData(json.data);
+        } catch (error) {
+          console.error("Error fetching visualization data:", error);
+        }
+      };
+      fetchVisualizationData();
+    }
+  }, [show, sessionName]);
+
+  // Used to have iteration name displayed and clicked through
+  React.useEffect(() => {
+    if (tokenData && Object.keys(tokenData).length > 0) {
+      const tokenKey = Object.keys(tokenData)[0];
+      const movements = tokenData[tokenKey].movements;
+
+      if (movements && movements.length > 0) {
+        const iterationDisplayNames = movements.map((m: any) => m.iteration);
+        setIterationNames(iterationDisplayNames);
+        setCurrentIteration(1);
+      }
+    }
+  }, [tokenData]);
+
+  // Grab the background image
+  React.useEffect(() => {
+    if (show && sessionName) {
+      const fetchImage = async () => {
+        try {
+          const response = await fetch(
+            `/api/fetch/iterationMap?sessionName=${encodeURIComponent(
+              sessionName
+            )}`
+          );
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch background image");
+          }
+
+          const json = await response.json();
+          setBackgroundImage(json.url);
+        } catch (error) {
+          console.error("Error fetching background image:", error);
+        }
+      };
+      fetchImage();
+    }
+  }, [show, sessionName]);
+
+  // Manipulate the image dimensions to align with tokens
+  React.useEffect(() => {
+    if (!backgroundImage) return;
+    const img = new Image();
+    img.src = backgroundImage;
+    img.onload = () => {
+      setBgDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = (err) => {
+      console.error("Error loading background image", err);
+    };
+  }, [backgroundImage]);
+
+  // Create the graph
+  React.useEffect(() => {
+    if (
+      !show ||
+      !tokenData ||
+      Object.keys(tokenData).length === 0 ||
+      !svgRef.current ||
+      !backgroundImage ||
+      !bgDimensions
+    )
+      return;
+
+    // Graph dimensions
+    const svgWidth = 800;
+    const svgHeight = 800;
+    const margin = { top: 40, right: 40, bottom: 40, left: 40 };
+    const width = svgWidth - margin.left - margin.right;
+    const height = svgHeight - margin.top - margin.bottom;
+
+    d3.select(svgRef.current).select("svg").remove();
+
+    // Make SVG element
+    const svg = d3
+      .select(svgRef.current)
+      .append("svg")
+      .attr("width", svgWidth)
+      .attr("height", svgHeight)
+      .attr("viewBox", `0 0 ${svgWidth} ${svgHeight}`)
+      .append("g")
+      .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+    // The scale of graph uses image dimensions
+    const xScale = d3
+      .scaleLinear()
+      .domain([0, bgDimensions.width])
+      .range([0, width]);
+    const yScale = d3
+      .scaleLinear()
+      .domain([0, bgDimensions.height])
+      .range([0, height]);
+
+    // image
+    svg
+      .append("image")
+      .attr("xlink:href", backgroundImage)
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", width)
+      .attr("height", height)
+      .attr("preserveAspectRatio", "xMidYMid slice")
+      .attr("opacity", 0.7);
+
+    // Create gridlines using ticks at every 100 intervals (relative to image dimensions)
+    const xTicks = d3.range(0, bgDimensions.width + 1, 100);
+    const yTicks = d3.range(0, bgDimensions.height + 1, 100);
+
+    const xGrid = d3
+      .axisBottom(xScale)
+      .tickValues(xTicks)
+      .tickSize(-height)
+      .tickFormat(() => "");
+    svg
+      .append("g")
+      .attr("transform", `translate(0, ${height})`)
+      .call(xGrid)
+      .selectAll("line")
+      .attr("stroke", "#ddd");
+
+    const yGrid = d3
+      .axisLeft(yScale)
+      .tickValues(yTicks)
+      .tickSize(-width)
+      .tickFormat(() => "");
+    svg.append("g").call(yGrid).selectAll("line").attr("stroke", "#ddd");
+
+    // Create axes
+    const xAxis = d3.axisBottom(xScale).tickValues(xTicks);
+    const yAxis = d3.axisLeft(yScale).tickValues(yTicks);
+
+    svg.append("g").attr("transform", `translate(0, ${height})`).call(xAxis);
+    svg.append("g").call(yAxis);
+
+    // Draw the token movements, based on currentIteration
+    Object.values(tokenData).forEach((token: any) => {
+      const visiblePoints = token.movements.slice(0, currentIteration);
+      if (!visiblePoints || visiblePoints.length === 0) return;
+
+      const lineGenerator = d3
+        .line()
+        .x((d: any) => xScale(+d.x))
+        .y((d: any) => yScale(+d.y));
+
+      svg
+        .append("path")
+        .datum(visiblePoints)
+        .attr("d", lineGenerator)
+        .attr("stroke", token.color)
+        .attr("fill", "none")
+        .attr("stroke-width", 2);
+
+      svg
+        .selectAll(`.token-${token.id}`)
+        .data(visiblePoints)
+        .enter()
+        .append("circle")
+        .attr("cx", (d: any) => xScale(+d.x))
+        .attr("cy", (d: any) => yScale(+d.y))
+        .attr("r", 4)
+        .attr("fill", token.color);
+    });
+
+    // Creates a legend in top-left
+    const legend = svg.append("g").attr("transform", "translate(10,10)");
+    Object.values(tokenData).forEach((token: any, i: number) => {
+      legend
+        .append("rect")
+        .attr("x", 0)
+        .attr("y", i * 25)
+        .attr("width", 20)
+        .attr("height", 20)
+        .attr("fill", token.color);
+      legend
+        .append("text")
+        .attr("x", 25)
+        .attr("y", i * 25 + 15)
+        .text(token.label)
+        .attr("font-size", "12px");
+    });
+  }, [show, tokenData, backgroundImage, bgDimensions, currentIteration]);
+
+  if (!show) return null;
+
+  return (
+    <div style={movementModalOverlayStyle}>
+      <div style={movementModalStyle}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: "10px",
+          }}
+        >
+          <h2>Movement Graph for {sessionName}</h2>
+          <div>
+            <button onClick={onClose}>Close</button>
+            <div
+              style={{
+                position: "absolute",
+                top: 60,
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                gap: "10px",
+              }}
+            >
+              <button
+                onClick={() =>
+                  setCurrentIteration((prev) => Math.max(prev - 1, 1))
+                }
+                style={{
+                  marginRight: "5px",
+                  border: "2px solid #ccc",
+                  padding: "3px",
+                }}
+              >
+                Prev
+              </button>
+              <span style={{ fontSize: "14px", fontWeight: "bold" }}>
+                Iteration: {iterationNames[currentIteration - 1] || "N/A"}
+              </span>
+              <button
+                onClick={() => {
+                  if (iterationNames.length > 0) {
+                    setCurrentIteration((prev) =>
+                      Math.min(prev + 1, iterationNames.length)
+                    );
+                  }
+                }}
+                style={{
+                  marginLeft: "5px",
+                  border: "2px solid #ccc",
+                  padding: "3px",
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+        <div ref={svgRef} style={{ width: "800px", height: "800px" }} />{" "}
+        {/* Graph */}
+      </div>
+    </div>
+  );
+};
+
+const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
+  show,
+  onClose,
+  sessionName,
+}) => {
+  const svgRef = React.useRef<HTMLDivElement>(null);
+  const [tokenData, setTokenData] = React.useState<any>(null);
+  const [backgroundImage, setBackgroundImage] = React.useState<string | null>(
+    null
+  );
+  const [bgDimensions, setBgDimensions] = React.useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const [currentIteration, setCurrentIteration] = React.useState<number>(1);
+  const [iterationNames, setIterationNames] = React.useState<string[]>([]);
+  const [selectedTokens, setSelectedTokens] = React.useState<string[]>([]);
+  const [showCenter, setShowCenter] = React.useState<boolean>(true);
+
+  // Grab the token data from all iterations
+  React.useEffect(() => {
+    if (show && sessionName) {
+      const fetchVisualizationData = async () => {
+        try {
+          const response = await fetch(`/api/grabIterationData/visualData`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionName }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch visualization data");
+          }
+
+          const json = await response.json();
+          setTokenData(json.data);
+          setSelectedTokens(Object.keys(json.data));
+        } catch (error) {
+          console.error("Error fetching visualization data:", error);
+        }
+      };
+      fetchVisualizationData();
+    }
+  }, [show, sessionName]);
+
+  // Sets up iteration names for display
+  React.useEffect(() => {
+    if (tokenData && Object.keys(tokenData).length > 0) {
+      const tokenKey = Object.keys(tokenData)[0];
+      const movements = tokenData[tokenKey].movements;
+
+      if (movements && movements.length > 0) {
+        const iterationDisplayNames = movements.map((m: any) => m.iteration);
+        setIterationNames(iterationDisplayNames);
+        setCurrentIteration(1);
+      }
+    }
+  }, [tokenData]);
+
+  // Grab the background image
+  React.useEffect(() => {
+    if (show && sessionName) {
+      const fetchImage = async () => {
+        try {
+          const response = await fetch(
+            `/api/fetch/iterationMap?sessionName=${encodeURIComponent(
+              sessionName
+            )}`
+          );
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch background image");
+          }
+
+          const json = await response.json();
+          setBackgroundImage(json.url);
+        } catch (error) {
+          console.error("Error fetching background image:", error);
+        }
+      };
+      fetchImage();
+    }
+  }, [show, sessionName]);
+
+  // Manipulate the image dimensions to align with tokens
+  React.useEffect(() => {
+    if (!backgroundImage) return;
+    const img = new Image();
+    img.src = backgroundImage;
+    img.onload = () => {
+      setBgDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = (err) => {
+      console.error("Error loading background image", err);
+    };
+  }, [backgroundImage]);
+
+  // Gets the information of tokens that are selected
+  const selectedPositions = React.useMemo(() => {
+    if (!tokenData) return [];
+    return selectedTokens
+      .map((tokenId) => {
+        const token = tokenData[tokenId];
+        if (!token || !token.movements || token.movements.length === 0)
+          return null;
+        return (
+          token.movements[currentIteration - 1] ||
+          token.movements[token.movements.length - 1]
+        );
+      })
+      .filter((pt) => pt !== null)
+      .map((pt: any) => ({ x: +pt.x, y: +pt.y }));
+  }, [tokenData, selectedTokens, currentIteration]);
+
+  const center = React.useMemo(() => {
+    // Averages the x and y to find center coords
+    if (selectedPositions.length === 0) {
+      return null;
+    }
+
+    const average = selectedPositions.reduce(
+      (acc, pt) => ({
+        x: acc.x + pt.x,
+        y: acc.y + pt.y,
+      }),
+      { x: 0, y: 0 }
+    );
+    return {
+      x: average.x / selectedPositions.length,
+      y: average.y / selectedPositions.length,
+    };
+  }, [selectedPositions]);
+
+  // Create the graph
+  React.useEffect(() => {
+    if (
+      !show ||
+      !tokenData ||
+      Object.keys(tokenData).length === 0 ||
+      !svgRef.current ||
+      !backgroundImage ||
+      !bgDimensions
+    )
+      return;
+
+    // Graph dimensions
+    const svgWidth = 800;
+    const svgHeight = 800;
+    const margin = { top: 40, right: 40, bottom: 40, left: 40 };
+    const width = svgWidth - margin.left - margin.right;
+    const height = svgHeight - margin.top - margin.bottom;
+
+    d3.select(svgRef.current).select("svg").remove();
+
+    // Make SVG element
+    const svg = d3
+      .select(svgRef.current)
+      .append("svg")
+      .attr("width", svgWidth)
+      .attr("height", svgHeight)
+      .attr("viewBox", `0 0 ${svgWidth} ${svgHeight}`)
+      .append("g")
+      .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+    // The scale of graph uses image dimensions
+    const xScale = d3
+      .scaleLinear()
+      .domain([0, bgDimensions.width])
+      .range([0, width]);
+    const yScale = d3
+      .scaleLinear()
+      .domain([0, bgDimensions.height])
+      .range([0, height]);
+
+    // image
+    svg
+      .append("image")
+      .attr("xlink:href", backgroundImage)
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", width)
+      .attr("height", height)
+      .attr("preserveAspectRatio", "xMidYMid slice")
+      .attr("opacity", 0.7);
+
+    // Create gridlines using ticks at every 100 intervals (relative to image dimensions)
+    const xTicks = d3.range(0, bgDimensions.width + 1, 100);
+    const yTicks = d3.range(0, bgDimensions.height + 1, 100);
+
+    const xGrid = d3
+      .axisBottom(xScale)
+      .tickValues(xTicks)
+      .tickSize(-height)
+      .tickFormat(() => "");
+    svg
+      .append("g")
+      .attr("transform", `translate(0, ${height})`)
+      .call(xGrid)
+      .selectAll("line")
+      .attr("stroke", "#ddd");
+
+    const yGrid = d3
+      .axisLeft(yScale)
+      .tickValues(yTicks)
+      .tickSize(-width)
+      .tickFormat(() => "");
+    svg.append("g").call(yGrid).selectAll("line").attr("stroke", "#ddd");
+
+    // Create axes
+    const xAxis = d3.axisBottom(xScale).tickValues(xTicks);
+    const yAxis = d3.axisLeft(yScale).tickValues(yTicks);
+    svg.append("g").attr("transform", `translate(0, ${height})`).call(xAxis);
+    svg.append("g").call(yAxis);
+
+    // Draw lines between selected tokens
+    if (selectedPositions.length > 1) {
+      for (let i = 0; i < selectedPositions.length - 1; i++) {
+        // Ensures points connected to all other points
+        for (let j = i + 1; j < selectedPositions.length; j++) {
+          svg
+            .append("line")
+            .attr("x1", xScale(selectedPositions[i].x))
+            .attr("y1", yScale(selectedPositions[i].y))
+            .attr("x2", xScale(selectedPositions[j].x))
+            .attr("y2", yScale(selectedPositions[j].y))
+            .attr("stroke", "blue")
+            .attr("stroke-width", 2)
+            .attr("opacity", 0.8);
+        }
+      }
+    }
+
+    // Only the selected tokens get showed
+    selectedPositions.forEach((pt, index) => {
+      const token = tokenData[selectedTokens[index]];
+      svg
+        .append("circle")
+        .attr("cx", xScale(pt.x))
+        .attr("cy", yScale(pt.y))
+        .attr("r", 8)
+        .attr("fill", token.color);
+    });
+
+    // Centerpoint
+    if (showCenter && center) {
+      svg
+        .append("circle")
+        .attr("cx", xScale(center.x))
+        .attr("cy", yScale(center.y))
+        .attr("r", 10)
+        .attr("fill", "yellow")
+        .attr("stroke", "black")
+        .attr("stroke-width", 2);
+
+      svg
+        .append("text")
+        .attr("x", xScale(center.x))
+        .attr("y", yScale(center.y) - 15)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "12px")
+        .attr("fill", "black")
+        .text("Center");
+    }
+    // Creates a legend in top-left
+    const legend = svg.append("g").attr("transform", "translate(10,10)");
+    selectedTokens.forEach((tokenId, i) => {
+      const token = tokenData[tokenId];
+      if (!token) return;
+      legend
+        .append("rect")
+        .attr("x", 0)
+        .attr("y", i * 25)
+        .attr("width", 20)
+        .attr("height", 20)
+        .attr("fill", token.color);
+      legend
+        .append("text")
+        .attr("x", 25)
+        .attr("y", i * 25 + 15)
+        .text(token.label)
+        .attr("font-size", "12px");
+    });
+  }, [
+    show,
+    tokenData,
+    backgroundImage,
+    bgDimensions,
+    currentIteration,
+    selectedTokens,
+    center,
+    showCenter,
+  ]);
+
+  // togglable selection of tokens
+  const toggleTokenSelection = (tokenId: string) => {
+    setSelectedTokens((prev) =>
+      prev.includes(tokenId)
+        ? prev.filter((id) => id !== tokenId)
+        : [...prev, tokenId]
+    );
+  };
+
+  // Left sidebar
+  const leftSidebar = () => {
+    if (!tokenData) return null;
+    const tokenIds = Object.keys(tokenData);
+
+    return (
+      <div
+        style={{
+          flex: "0 0 150px",
+          borderRight: "1px solid #ccc",
+          padding: "10px",
+          overflowY: "auto",
+          height: "100%",
+        }}
+      >
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            marginBottom: "10px",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={showCenter}
+            onChange={() => setShowCenter((prev) => !prev)}
+            style={{ marginRight: "5px" }}
+          />
+          Center
+        </label>
+
+        <h3 style={{ marginTop: 0 }}>Tokens</h3>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {tokenIds.map((tokenId) => (
+            <li
+              key={tokenId}
+              style={{ marginBottom: "8px", cursor: "pointer" }}
+            >
+              <label style={{ display: "flex", alignItems: "center" }}>
+                <input // Checkbox to allow selection of tokens that are to be displayed
+                  type="checkbox"
+                  checked={selectedTokens.includes(tokenId)}
+                  onChange={() => toggleTokenSelection(tokenId)}
+                  style={{ marginRight: "5px" }}
+                />
+                {tokenData[tokenId].label}
+              </label>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  // Right sidebar
+  const rightSidebar = () => {
+    const pairDistances = React.useMemo(() => {
+      const distances: { key: string; label: string; distance: number }[] = []; // Calculates the hypotenuse between 2 points and displays it
+      for (let i = 0; i < selectedTokens.length - 1; i++) {
+        for (let j = i + 1; j < selectedTokens.length; j++) {
+          const token1 = tokenData[selectedTokens[i]];
+          const token2 = tokenData[selectedTokens[j]];
+
+          if (!token1 || !token2 || !token1.movements || !token2.movements)
+            continue;
+
+          const point1 =
+            token1.movements[currentIteration - 1] ||
+            token1.movements[token1.movements.length - 1];
+          const point2 =
+            token2.movements[currentIteration - 1] ||
+            token2.movements[token2.movements.length - 1];
+          const dx = +point2.x - +point1.x;
+          const dy = +point2.y - +point1.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          distances.push({
+            key: `${selectedTokens[i]} - ${selectedTokens[j]}`,
+            label: `${token1.label} to ${token2.label}`,
+            distance,
+          });
+        }
+      }
+      return distances;
+    }, [selectedTokens, tokenData, currentIteration]);
+
+    return (
+      <div
+        style={{
+          flex: "0 0 275px",
+          borderLeft: "1px solid #ccc",
+          padding: "10px",
+          overflowY: "auto",
+          height: "100%",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Center Point</h3>
+        {showCenter && center ? (
+          <div style={{ marginBottom: "15px" }}>
+            <p>
+              X: {center.x.toFixed(2)} <strong>|</strong> Y:{" "}
+              {center.y.toFixed(2)}
+            </p>
+          </div>
+        ) : (
+          <p style={{ marginBottom: "15px" }}>N/A</p>
+        )}
+        <h3 style={{ marginTop: 0 }}>Distances</h3>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {pairDistances.map((pd) => (
+            <li key={pd.key} style={{ marginBottom: "6px" }}>
+              {pd.label}: {pd.distance.toFixed(2)}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  if (!show) return null;
+
+  return (
+    <div style={herdModalOverlayStyle}>
+      <div style={herdModalStyle}>
+        <div
+          style={{ display: "flex", flexDirection: "column", height: "100%" }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "10px",
+            }}
+          >
+            <h2>Herd Graph for {sessionName}</h2>
+            <button onClick={onClose}>Close</button>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flex: 1,
+              width: "1225px",
+              height: "800px",
+            }}
+          >
+            {leftSidebar()}
+            <div style={{ flex: 1, position: "relative" }}>
+              <div
+                style={{
+                  position: "absolute",
+                  top: -5,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  display: "flex",
+                  gap: "10px",
+                }}
+              >
+                <button
+                  onClick={() =>
+                    setCurrentIteration((prev) => Math.max(prev - 1, 1))
+                  }
+                  style={{
+                    marginRight: "5px",
+                    border: "2px solid #ccc",
+                    padding: "3px",
+                  }}
+                >
+                  Prev
+                </button>
+                <span style={{ fontSize: "14px", fontWeight: "bold" }}>
+                  Iteration: {iterationNames[currentIteration - 1] || "N/A"}
+                </span>
+                <button
+                  onClick={() => {
+                    if (iterationNames.length > 0) {
+                      setCurrentIteration((prev) =>
+                        Math.min(prev + 1, iterationNames.length)
+                      );
+                    }
+                  }}
+                  style={{
+                    marginLeft: "5px",
+                    border: "2px solid #ccc",
+                    padding: "3px",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+              <div ref={svgRef} style={{ width: "800px", height: "800px" }} />{" "}
+              {/* Graph */}
+            </div>
+            {rightSidebar()}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1153,6 +2002,54 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
       </div>
     </div>
   );
+};
+
+const herdModalOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 1000000001,
+};
+
+const herdModalStyle: React.CSSProperties = {
+  position: "relative",
+  background: "white",
+  padding: "20px",
+  borderRadius: "8px",
+  textAlign: "center",
+  width: "1225px",
+  height: "850px",
+  zIndex: 1000000001,
+};
+
+const movementModalOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 1000000001,
+};
+
+const movementModalStyle: React.CSSProperties = {
+  position: "relative",
+  background: "white",
+  padding: "20px",
+  borderRadius: "8px",
+  textAlign: "center",
+  width: "850px",
+  height: "850px",
+  zIndex: 1000000001,
 };
 
 const viewModalOverlayStyle: React.CSSProperties = {

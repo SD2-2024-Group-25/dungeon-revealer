@@ -21,7 +21,7 @@ export const useSelectFolderDialog = (
 
       const jsonFile = files.find((file) => file.name.endsWith(".json"));
 
-      const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".webp"];
+      const imageExtensions = [".png", ".jpg", ".jpeg", ".svg"];
       const imageFiles = files.filter((file) =>
         imageExtensions.some((ext) => file.name.toLowerCase().endsWith(ext))
       );
@@ -56,7 +56,7 @@ export const useSelectFolderDialog = (
       <input
         type="file"
         multiple
-        accept=".json,.png,.jpg,.gif,.jpeg,.webp,.svg"
+        accept=".json,.png,.jpg,.jpeg,.svg"
         ref={ref}
         onChange={onChange}
         style={{ display: "none" }}

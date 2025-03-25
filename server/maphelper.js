@@ -19,4 +19,16 @@ async function getMapsFromDisk() {
   }
 }
 
-module.exports = { getMapsFromDisk };
+function getExistingMapImage(directory) {
+  // Checks the type of map file
+  const possibleFiles = ["map.png", "map.jpg", "map.jpeg", "map.svg"];
+  for (const fileName of possibleFiles) {
+    const filePath = path.join(directory, fileName);
+    if (fs.existsSync(filePath)) {
+      return fileName;
+    }
+  }
+  return "";
+}
+
+module.exports = { getMapsFromDisk, getExistingMapImage };

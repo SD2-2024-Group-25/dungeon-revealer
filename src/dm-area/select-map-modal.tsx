@@ -20,12 +20,13 @@ import { selectMapModal_ActiveMap_MapFragment$key } from "./__generated__/select
 import { selectMapModal_ActiveMapQuery } from "./__generated__/selectMapModal_ActiveMapQuery.graphql";
 
 import { useSelectFolderDialog } from "../hooks/use-select-folder-dialog"; // This is for "folder" selection, but just prompts 4 files (1 json, 3 png)
-import { useRelayEnvironment } from "relay-hooks";
+import mitt from "mitt"; // Used to close all modals
+const emitter = mitt();
 
 // deleteScenario function to call API and delete a selected map
 const deleteScenario = async (folderName: string): Promise<void> => {
   try {
-    const response = await fetch(`/api/delete/destroy`, {
+    const response = await fetch(`/api/selectMap/delete`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folderName }),
@@ -54,7 +55,7 @@ const uploadScenario = async (
     }))
   );
 
-  const response = await fetch("/api/upload/scenario", {
+  const response = await fetch("/api/selectMap/upload", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ files: formattedFiles, parentFolder, folderName }),
@@ -517,6 +518,21 @@ export const SelectMapModal = ({
     closeModal();
   }, [closeModal, canClose]);
 
+  const close = React.useCallback(() => {
+    closeModal();
+  }, [closeModal]);
+
+  React.useEffect(() => {
+    // Close modal remotely
+    const handleClose = () => {
+      closeModal();
+    };
+    emitter.on("closeSelectMapModal", handleClose);
+    return () => {
+      emitter.off("closeSelectMapModal", handleClose);
+    };
+  }, [closeModal]);
+
   return (
     <>
       <Modal onClickOutside={closeIfPossible} onPressEscape={closeIfPossible}>
@@ -609,6 +625,7 @@ export const SelectMapModal = ({
                   fullWidth
                   onUploadScenario={(files, folderName) => {
                     uploadScenario(files, "maps", folderName);
+                    close();
                   }}
                 >
                   <>
@@ -772,10 +789,13 @@ export const SelectScenarioModal = ({
     null
   );
   const [showNamingModal, setShowNamingModal] = React.useState(false);
+  const close = React.useCallback(() => {
+    closeModal();
+  }, [closeModal]);
 
   //Fetch scenarios from the "defaultmaps" directory (used for list)
   React.useEffect(() => {
-    fetch("/api/fetch_default/defaultmaps")
+    fetch("/api/fetch/defaultmaps")
       .then((res) => res.json())
       .then((data) => setScenarios(data))
       .catch((err) => console.error("Error fetching scenarios:", err));
@@ -783,7 +803,7 @@ export const SelectScenarioModal = ({
 
   //Function to put copied scenario in maps folder
   const onCreateScenario = (sourceFolder: string, newScenarioName: string) => {
-    fetch("/api/copy/files", {
+    fetch("/api/selectMap/copy", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sourceFolder, newScenarioName }),
@@ -849,6 +869,25 @@ export const SelectScenarioModal = ({
                 <p>No scenarios found.</p>
               )}
             </Modal.Aside>
+            {selectedScenario && (
+              <div
+                style={{
+                  flex: 1,
+                  padding: "1rem",
+                  borderLeft: "1px solid #ddd",
+                }}
+              >
+                <h3 style={{ margin: "0 0 1rem 0" }}></h3>
+                <img
+                  src={`/api/default_Preview/mapImage?sourceFolder=${selectedScenario}`}
+                  style={{
+                    width: "100%",
+                    maxHeight: "100%",
+                    overflowY: "scroll",
+                  }}
+                />
+              </div>
+            )}
           </Modal.Body>
 
           <Modal.Footer
@@ -866,6 +905,7 @@ export const SelectScenarioModal = ({
                 fullWidth
                 onUploadScenario={(files, folderName) => {
                   uploadScenario(files, "defaultmaps", folderName);
+                  close();
                 }}
               >
                 <>
@@ -923,6 +963,8 @@ export const SelectScenarioModal = ({
           onSubmit={(newScenarioName) => {
             onCreateScenario(selectedScenario, newScenarioName);
             setShowNamingModal(false);
+            emitter.emit("closeSelectMapModal");
+            close();
           }}
         />
       )}
