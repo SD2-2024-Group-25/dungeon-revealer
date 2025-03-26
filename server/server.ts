@@ -24,6 +24,7 @@ import type {
   RequestHandler,
   Request,
 } from "express-serve-static-core";
+import zoomRoutes from "./routes/zoom";
 
 let maps: Maps | null = null;
 
@@ -715,6 +716,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   apiRouter.use(fileRouter);
   app.use(graphqlRouter);
   apiRouter.use(notesImportRouter);
+
+  apiRouter.use("/zoom", zoomRoutes);
 
   app.use("/api", apiRouter);
 

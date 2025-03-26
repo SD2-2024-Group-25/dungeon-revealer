@@ -2086,6 +2086,267 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
   );
 };
 
+interface ZoomModalProps {
+  onClose: () => void;
+}
+
+const ZoomModal: React.FC<ZoomModalProps> = ({ onClose }) => {
+  const [accountId, setAccountId] = React.useState("");
+  const [clientId, setClientId] = React.useState("");
+  const [clientSecret, setClientSecret] = React.useState("");
+  const [recordingYear, setRecordingYear] = React.useState("");
+  const [monthFrom, setMonthFrom] = React.useState("");
+  const [monthTo, setMonthTo] = React.useState("");
+  const [userEmail, setUserEmail] = React.useState("");
+
+  const handleDownload = async () => {
+    const payload = {
+      accountId,
+      clientId,
+      clientSecret,
+      recordingYear,
+      monthFrom,
+      monthTo,
+      userEmail,
+    };
+
+    if (!userEmail.trim()) {
+      alert("Please enter your Zoom email.");
+      return;
+    }
+
+    const response = await fetch("/api/zoom/download", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    onClose();
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1001,
+      }}
+    >
+      <div
+        style={{
+          background: "white",
+          padding: "20px",
+          borderRadius: "8px",
+          width: "400px",
+        }}
+      >
+        <h2 style={{ marginBottom: "16px" }}>Download Zoom Recordings</h2>
+
+        {/* Wrap your labels+inputs in a container with spacing */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Zoom Email:
+            </label>
+            <input
+              type="email"
+              value={userEmail}
+              onChange={(e) => setUserEmail(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Account ID:
+            </label>
+            <input
+              type="text"
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Client ID:
+            </label>
+            <input
+              type="text"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Client Secret:
+            </label>
+            <input
+              type="password"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Recording Year:
+            </label>
+            <input
+              type="number"
+              value={recordingYear}
+              onChange={(e) => setRecordingYear(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Month From:
+            </label>
+            <input
+              type="number"
+              value={monthFrom}
+              onChange={(e) => setMonthFrom(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Month To:
+            </label>
+            <input
+              type="number"
+              value={monthTo}
+              onChange={(e) => setMonthTo(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Buttons at the bottom */}
+        <div style={{ marginTop: "20px", textAlign: "right" }}>
+          <button
+            onClick={handleDownload}
+            style={{
+              padding: "8px 16px",
+              marginRight: "8px",
+              backgroundColor: "#007bff",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
+            Download
+          </button>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#6c757d",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
   const [sessionName, setSessionName] = React.useState("");
 
@@ -2478,6 +2739,11 @@ export const DmMap = (props: {
     }
   };
 
+  const [isZoomModalVisible, setZoomModalVisible] = React.useState(false);
+
+  const openZoomModal = () => setZoomModalVisible(true);
+  const closeZoomModal = () => setZoomModalVisible(false);
+
   const [isDownloadModalVisible, setDownloadModalVisible] =
     React.useState(false);
   const [isSaveModalVisible, setSaveModalVisible] = React.useState(false);
@@ -2809,6 +3075,13 @@ export const DmMap = (props: {
                   onClose={() => setViewModalOpen(false)}
                   sessionName={selectedSessionName}
                 />
+                <Toolbar.Item isActive>
+                  <Toolbar.Button onClick={openZoomModal}>
+                    <Icon.DownloadCloud width="20px" height="20px" />
+                    <Icon.Label>Zoom</Icon.Label>
+                  </Toolbar.Button>
+                </Toolbar.Item>
+                {isZoomModalVisible && <ZoomModal onClose={closeZoomModal} />}
                 <Toolbar.Item isActive>
                   <Toolbar.Button onClick={openSaveModal}>
                     <Icon.Save boxSize="20px" />
