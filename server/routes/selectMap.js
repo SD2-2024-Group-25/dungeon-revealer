@@ -37,8 +37,6 @@ router.post("/upload", async (req, res) => {
   }
 });
 
-//module.exports = router;
-
 router.post("/copy", async (req, res) => {
   // API to copy a default scenario into the main maps folder.
   const { sourceFolder, newScenarioName } = req.body;
@@ -75,8 +73,8 @@ router.post("/copy", async (req, res) => {
 
       // Read the JSON file, update the id and title, and then write it back.
       const jsonData = await fs1.readJson(jsonFilePath);
-      jsonData.id = newScenarioName; // Update ID to match the new scenario name.
-      jsonData.title = newScenarioName; // Update title to the new scenario name.
+      jsonData.id = newScenarioName;
+      jsonData.title = newScenarioName;
       await fs1.writeJson(jsonFilePath, jsonData, { spaces: 2 });
       console.log(`Updated JSON file: ${jsonFilePath}`);
     }
@@ -87,7 +85,6 @@ router.post("/copy", async (req, res) => {
       throw new Error("Maps instance is not initialized.");
     }
     await server.maps.reload();
-    //console.log("maps.reload() completed successfully!"); // debug
     return res
       .status(200)
       .json({ message: "Scenario copied and updated successfully!" });
@@ -98,8 +95,6 @@ router.post("/copy", async (req, res) => {
       .json({ error: "Failed to copy and update scenario." });
   }
 });
-
-//module.exports = router;
 
 router.delete("/delete", (req, res) => {
   //Delete defaultmap api
