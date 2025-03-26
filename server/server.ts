@@ -429,6 +429,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
   apiRouter.post("/save-session/:folderName", (req, res) => {
     const name = req.params.folderName;
+    // const { zoomFiles } = req.body;
     console.log(name);
 
     if (!name || name.trim() === "") {
@@ -463,6 +464,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       destinationFolder,
       "whiteboard"
     );
+    const sourceZoomFolder = path.join(researchPath, "zoom");
+    const destinationZoomFolder = path.join(destinationFolder, "zoom");
 
     try {
       if (!fs.existsSync(sourceSessionFolder)) {
@@ -481,10 +484,12 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
       copyFolderRecursive(sourceNotesFolder, destinationNotesFolder);
       copyFolderRecursive(sourceWhiteboardFolder, destinationWhiteboardFolder);
+      copyFolderRecursive(sourceZoomFolder, destinationZoomFolder);
 
       deleteFolderContents(sourceSessionFolder);
       deleteFolderContents(sourceNotesFolder);
       deleteFolderContents(sourceWhiteboardFolder);
+      deleteFolderContents(sourceZoomFolder);
 
       console.log(`Session saved: ${finalFolderName}`);
       res

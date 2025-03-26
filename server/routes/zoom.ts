@@ -110,18 +110,18 @@ router.post("/copy-files", async (req, res) => {
       "research",
       "zoom"
     );
-    const finalSavedDir = path.join(
-      __dirname,
-      "..",
-      "..",
-      "public",
-      "research",
-      "saved"
-    );
+    // const finalSavedDir = path.join(
+    //   __dirname,
+    //   "..",
+    //   "..",
+    //   "public",
+    //   "research",
+    //   "saved"
+    // );
 
     // Ensure directories exist
     fs.ensureDirSync(finalZoomDir);
-    fs.ensureDirSync(finalSavedDir);
+    // fs.ensureDirSync(finalSavedDir);
 
     // Copy each selected file
     for (const fileName of selectedFiles) {
@@ -132,8 +132,8 @@ router.post("/copy-files", async (req, res) => {
       fs.copyFileSync(srcPath, destZoom);
 
       // Also copy to finalSavedDir
-      const destSaved = path.join(finalSavedDir, fileName);
-      fs.copyFileSync(srcPath, destSaved);
+      //   const destSaved = path.join(finalSavedDir, fileName);
+      //   fs.copyFileSync(srcPath, destSaved);
     }
 
     res.json({ success: true, message: "Selected files copied successfully." });

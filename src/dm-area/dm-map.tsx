@@ -2364,10 +2364,12 @@ const ZoomModal: React.FC<ZoomModalProps> = ({
 
 interface ZoomFileSelectorModalProps {
   onClose: () => void;
+  onFilesSelected: (files: string[]) => void;
 }
 
 const ZoomFileSelectorModal: React.FC<ZoomFileSelectorModalProps> = ({
   onClose,
+  onFilesSelected,
 }) => {
   const [files, setFiles] = React.useState<string[]>([]);
   const [selected, setSelected] = React.useState<string[]>([]);
@@ -2395,23 +2397,22 @@ const ZoomFileSelectorModal: React.FC<ZoomFileSelectorModalProps> = ({
 
   // Copy the selected files
   const handleCopySelected = async () => {
-    try {
-      const response = await fetch("/api/zoom/copy-files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ selectedFiles: selected }),
-      });
-      const result = await response.json();
-      if (response.ok) {
-        alert("Files copied successfully!");
-        onClose(); // close the modal
-      } else {
-        alert("Error copying files: " + result.error);
-      }
-    } catch (err: any) {
-      console.error("Error copying files:", err);
-      alert("Error copying files: " + err.message);
+    if (selected.length === 0) {
+      alert("Please select at least one file to save.");
+      return;
     }
+    const response = await fetch("/api/zoom/copy-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selectedFiles: selected }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      alert("Error copying files: " + result.error);
+    }
+    onFilesSelected(selected);
+    alert("Files copied successfully!");
+    onClose(); // close the modal
   };
 
   return (
@@ -2527,6 +2528,7 @@ const SaveModal: React.FC<SaveModalProps> = ({ show, onClose }) => {
   const [sessionName, setSessionName] = React.useState("");
   const [isZoomModalVisible, setZoomModalVisible] = React.useState(false);
   const [showZoomFileSelector, setShowZoomFileSelector] = React.useState(false);
+  const [zoomFiles, setZoomFiles] = React.useState<string[]>([]);
 
   const handleSaveClick = async () => {
     if (!sessionName.trim()) {
@@ -2536,6 +2538,8 @@ const SaveModal: React.FC<SaveModalProps> = ({ show, onClose }) => {
     try {
       const response = await fetch(`/api/save-session/${sessionName}`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zoomFiles }),
       });
       if (response.ok) {
         console.log("Session saved successfully.");
@@ -2602,6 +2606,10 @@ const SaveModal: React.FC<SaveModalProps> = ({ show, onClose }) => {
         {showZoomFileSelector && (
           <ZoomFileSelectorModal
             onClose={() => setShowZoomFileSelector(false)}
+            onFilesSelected={(files) => {
+              // Save the selected filenames in state
+              setZoomFiles(files);
+            }}
           />
         )}
         {isZoomModalVisible && (
