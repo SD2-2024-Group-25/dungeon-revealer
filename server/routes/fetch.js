@@ -109,4 +109,31 @@ router.get("/iterationMap", async (req, res) => {
   }
 });
 
+router.get("/whiteboardIterations", async (req, res) => {
+  // Gets all the images in whiteboard folder
+  const { sessionName } = req.query;
+  if (!sessionName) {
+    return res.status(400).json({ error: "Missing sessionName" });
+  }
+
+  try {
+    const basePath = path.resolve("./");
+    const whiteboardFolder = path.join(
+      basePath,
+      "public",
+      "research",
+      "saved",
+      sessionName,
+      "whiteboard"
+    );
+
+    const images = await fs.readdir(whiteboardFolder);
+
+    return res.status(200).json({ images });
+  } catch (error) {
+    console.error("Error fetching whiteboard:", error);
+    return res.status(500).json({ error: "Failed to fetch whiteboard." });
+  }
+});
+
 module.exports = router;

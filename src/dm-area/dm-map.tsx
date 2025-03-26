@@ -756,11 +756,9 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const [error, setError] = React.useState<string | null>(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState<boolean>(true);
-  const [isMovementModalOpen, setIsMovementModalOpen] =
-    React.useState<boolean>(false);
   const [showMovementModal, setShowMovementModal] = React.useState(false);
-  const [isHerdModalOpen, setIsHerdModalOpen] = React.useState<boolean>(false);
   const [showHerdModal, setShowHerdModal] = React.useState(false);
+  const [showWhiteboardModal, setShowWhiteboardModal] = React.useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
   // Fetch sessions if modal is shown and no session is selected
@@ -1006,7 +1004,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
             padding: "5px",
           }}
         >
-          {isMovementModalOpen ? "Open Movement Graph" : "Open Movement Graph"}
+          Open Movement Graph
         </button>
 
         {/* Button that opens herd graph */}
@@ -1021,7 +1019,22 @@ const ViewModal: React.FC<ViewModalProps> = ({
             padding: "5px",
           }}
         >
-          {isHerdModalOpen ? "Open Herd Graph" : "Open Herd Graph"}
+          Open Herd Graph
+        </button>
+
+        {/* Button that opens the whiteboard iterations */}
+        <button
+          onClick={() => setShowWhiteboardModal(true)}
+          style={{
+            position: "absolute",
+            left: "85%",
+            top: "90px",
+            cursor: "pointer",
+            border: "2px solid #ccc",
+            padding: "5px",
+          }}
+        >
+          Open Whiteboard Iterations
         </button>
 
         {/* A button to toggle the sidebar */}
@@ -1140,6 +1153,13 @@ const ViewModal: React.FC<ViewModalProps> = ({
         <HerdGraphModal
           show={showHerdModal}
           onClose={() => setShowHerdModal(false)}
+          sessionName={sessionName}
+        />
+      )}
+      {showWhiteboardModal && (
+        <WhiteboardModal
+          show={showWhiteboardModal}
+          onClose={() => setShowWhiteboardModal(false)}
           sessionName={sessionName}
         />
       )}
@@ -1946,6 +1966,126 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
   );
 };
 
+const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
+  show,
+  onClose,
+  sessionName,
+}) => {
+  const [images, setImages] = React.useState<string[]>([]);
+  const [selectedImage, setSelectedImage] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState<boolean>(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Gets the whiteboard images from the session
+  React.useEffect(() => {
+    if (sessionName) {
+      setLoading(true);
+      const fetchImages = async () => {
+        try {
+          const response = await fetch(
+            `/api/fetch/whiteboardIterations?sessionName=${encodeURIComponent(
+              sessionName
+            )}`
+          );
+          if (!response.ok) {
+            throw new Error("Failed to fetch whiteboard images");
+          }
+
+          const data = await response.json();
+          setImages(data.images || []);
+
+          if (data.images && data.images.length > 0) {
+            setSelectedImage(data.images[0]);
+          } else {
+            setSelectedImage("");
+          }
+        } catch (error) {
+          console.error("Error fetching whiteboard images:", error);
+          setError("Error fetching images");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchImages();
+    }
+  }, [sessionName]);
+
+  if (!show) return null;
+
+  const imageUrl =
+    sessionName && selectedImage
+      ? `/research/saved/${sessionName}/whiteboard/${selectedImage}`
+      : "";
+
+  return (
+    <div style={whiteboardModalOverlayStyle}>
+      <div style={whiteboardModalStyle}>
+        <div style={{ display: "flex", height: "calc(100% - 40px)" }}>
+          {/* Left Sidebar */}
+          <div
+            style={{
+              width: "225px",
+              borderRight: "1px solid #ccc",
+              overflowY: "auto",
+              padding: "10px",
+            }}
+          >
+            {loading ? (
+              <p>Loading...</p>
+            ) : error ? (
+              <p>{error}</p>
+            ) : (
+              <ul style={{ listStyle: "none", padding: 10, margin: 0 }}>
+                {images.map((img) => (
+                  <li
+                    key={img}
+                    style={{ ...whiteboardImgStyle, cursor: "pointer" }}
+                    onClick={() => {
+                      setSelectedImage(img);
+                    }}
+                  >
+                    {img}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Right Panel */}
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              padding: "10px",
+            }}
+          >
+            {sessionName ? (
+              <>
+                <h2>{sessionName}</h2>
+                {selectedImage ? (
+                  <>
+                    <h3>{selectedImage}</h3>
+                    <img src={imageUrl} alt={selectedImage} style={imgStyle} />
+                  </>
+                ) : (
+                  <p>Please select a whiteboard image</p>
+                )}
+              </>
+            ) : (
+              <p>Please select a session</p>
+            )}
+          </div>
+        </div>
+        <button onClick={onClose} style={whiteboardCloseButtonStyle}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
   const [sessionName, setSessionName] = React.useState("");
 
@@ -2002,6 +2142,51 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
       </div>
     </div>
   );
+};
+
+const imgStyle: React.CSSProperties = {
+  maxWidth: "100%",
+  height: "auto",
+  objectFit: "contain",
+};
+
+const whiteboardImgStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "8px 0",
+  marginBottom: "10px",
+};
+
+const whiteboardCloseButtonStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "20px",
+  right: "20px",
+  cursor: "pointer",
+};
+
+const whiteboardModalOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 10000000001,
+};
+
+const whiteboardModalStyle: React.CSSProperties = {
+  position: "relative",
+  background: "white",
+  padding: "20px",
+  borderRadius: "8px",
+  textAlign: "center",
+  width: "60vw",
+  height: "80vh",
+  zIndex: 1000000001,
 };
 
 const herdModalOverlayStyle: React.CSSProperties = {
