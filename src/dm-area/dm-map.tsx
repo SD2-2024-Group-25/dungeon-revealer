@@ -1950,6 +1950,12 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
 const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
   const [sessionName, setSessionName] = React.useState("");
   const [showZoomModal, setShowZoomModal] = React.useState(false);
+  const [showSessionModal, setShowSessionModal] = React.useState(false);
+
+  const handleZoomSessionSelect = () => {
+    setShowZoomModal(false);
+    setShowSessionModal(false);
+  };
 
   const handleSaveClick = async () => {
     if (!sessionName.trim()) {
@@ -2007,7 +2013,11 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
           </button>
         </div>
       </div>
-      <ZoomModal show={showZoomModal} onClose={() => setShowZoomModal(false)} />
+      <ZoomModal
+        show={showZoomModal}
+        onClose={() => setShowZoomModal(false)}
+        onSessionSelect={handleZoomSessionSelect}
+      />
     </>
   );
 };

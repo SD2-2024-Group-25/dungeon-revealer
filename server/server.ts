@@ -60,6 +60,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   const researchPath = path.join(__dirname, "..", "public", "research");
   const notes_folder = path.join(researchPath, "notes");
   const sourceZoomFolder = path.join(researchPath, "downloads", "zoom");
+  const destZoomFolder = path.join(researchPath, "zoom");
   const fileStorage = new FileStorage({
     dataDirectory: env.DATA_DIRECTORY,
     db,
@@ -187,6 +188,23 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     });
   });
 
+  apiRouter.get("/list-zoom-sessions", async (req, res) => {
+    try {
+      if (!fs.existsSync(sourceZoomFolder)) {
+        return res.status(404).json({ error: "Zoom folder not found" });
+      }
+
+      const files = await fs.readdir(sourceZoomFolder);
+      const vttFiles = files.filter((file) =>
+        file.toLowerCase().endsWith(".vtt")
+      );
+
+      res.json({ files: vttFiles });
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to list Zoom sessions" });
+    }
+  });
+
   apiRouter.post("/active-map", requiresDmRole, (req, res) => {
     const mapId = req.body.mapId;
     if (mapId === undefined) {
@@ -304,6 +322,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     const zoomData = req.body;
 
     try {
+      deleteFolderContents(sourceZoomFolder);
       await loadZoomData({
         accountId: zoomData.accountId,
         clientId: zoomData.clientId,
@@ -739,6 +758,27 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
+  apiRouter.get(
+    "/zoom-session-select/:zoomSession",
+    requiresDmRole,
+    async (req, res) => {
+      const { zoomSession } = req.params;
+
+      const sourceFile = path.join(sourceZoomFolder, zoomSession);
+      const destFile = path.join(destZoomFolder, zoomSession);
+
+      try {
+        await fs.mkdir(destZoomFolder, { recursive: true }); // make sure target folder exists
+        await fs.copyFile(sourceFile, destFile);
+
+        res.json({ message: "Zoom session copied successfully" });
+      } catch (err) {
+        console.error("Error copying zoom session:", err);
+        res.status(500).json({ error: "Failed to copy zoom session" });
+      }
+    }
+  );
+
   apiRouter.get("/download-folder/:folderName", requiresDmRole, (req, res) => {
     const { folderName } = req.params;
     const folderPath = path.join(researchPath, "saved", folderName);
@@ -819,12 +859,18 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
     const destinationFolder = path.join(savedPath, finalFolderName);
     const sourceSessionFolder = path.join(researchPath, "downloads", "session");
+    const sourceZoomFolder = path.join(researchPath, "downloads", "zoom");
     const sourceNotesFolder = path.join(researchPath, "notes");
     const destinationNotesFolder = path.join(destinationFolder, "notes");
     const sourceWhiteboardFolder = path.join(researchPath, "whiteboard");
     const destinationWhiteboardFolder = path.join(
       destinationFolder,
       "whiteboard"
+    );
+    const selectedZoomFolder = path.join(researchPath, "zoom");
+    const destinationZoomFolder = path.join(
+      destinationFolder,
+      "speech_transcription"
     );
 
     try {
@@ -844,10 +890,13 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
       copyFolderRecursive(sourceNotesFolder, destinationNotesFolder);
       copyFolderRecursive(sourceWhiteboardFolder, destinationWhiteboardFolder);
+      copyFolderRecursive(selectedZoomFolder, destinationZoomFolder);
 
       deleteFolderContents(sourceSessionFolder);
       deleteFolderContents(sourceNotesFolder);
       deleteFolderContents(sourceWhiteboardFolder);
+      deleteFolderContents(selectedZoomFolder);
+      deleteFolderContents(sourceZoomFolder);
 
       console.log(`Session saved: ${finalFolderName}`);
       res
