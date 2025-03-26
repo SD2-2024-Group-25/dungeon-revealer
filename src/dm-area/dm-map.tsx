@@ -2517,20 +2517,26 @@ const ZoomFileSelectorModal: React.FC<ZoomFileSelectorModalProps> = ({
   );
 };
 
-const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
+interface SaveModalProps {
+  show: boolean;
+  onClose: () => void;
+  // you might already have others here
+}
+
+const SaveModal: React.FC<SaveModalProps> = ({ show, onClose }) => {
   const [sessionName, setSessionName] = React.useState("");
+  const [isZoomModalVisible, setZoomModalVisible] = React.useState(false);
+  const [showZoomFileSelector, setShowZoomFileSelector] = React.useState(false);
 
   const handleSaveClick = async () => {
     if (!sessionName.trim()) {
       alert("Please enter a session name.");
       return;
     }
-
     try {
       const response = await fetch(`/api/save-session/${sessionName}`, {
         method: "POST",
       });
-
       if (response.ok) {
         console.log("Session saved successfully.");
         onClose();
@@ -2540,6 +2546,17 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
     } catch (err) {
       console.error("Error saving session:", err);
     }
+  };
+
+  const openZoomModal = () => setZoomModalVisible(true);
+  const closeZoomModal = () => setZoomModalVisible(false);
+
+  // Callback to be called by the ZoomModal when downloads are done.
+  const handleZoomDownloadComplete = () => {
+    // Hide ZoomModal
+    setZoomModalVisible(false);
+    // Show the file selector
+    setShowZoomFileSelector(true);
   };
 
   if (!show) return null;
@@ -2564,6 +2581,35 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
             borderRadius: "4px",
           }}
         />
+        {/* New button to open the ZoomModal */}
+        <div style={{ marginTop: "16px", textAlign: "center" }}>
+          <button
+            onClick={openZoomModal}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#007bff",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginBottom: "16px",
+            }}
+          >
+            Retrieve Zoom Recordings
+          </button>
+        </div>
+        {/* Conditionally render the ZoomModal */}
+        {showZoomFileSelector && (
+          <ZoomFileSelectorModal
+            onClose={() => setShowZoomFileSelector(false)}
+          />
+        )}
+        {isZoomModalVisible && (
+          <ZoomModal
+            onClose={closeZoomModal}
+            onDownloadComplete={handleZoomDownloadComplete}
+          />
+        )}
         <button onClick={handleSaveClick} style={buttonStyle}>
           Save
         </button>
@@ -2909,16 +2955,12 @@ export const DmMap = (props: {
     }
   };
 
-  const [isZoomModalVisible, setZoomModalVisible] = React.useState(false);
+  // const [isZoomModalVisible, setZoomModalVisible] = React.useState(false);
 
-  const openZoomModal = () => setZoomModalVisible(true);
-  const closeZoomModal = () => setZoomModalVisible(false);
+  // const openZoomModal = () => setZoomModalVisible(true);
+  // const closeZoomModal = () => setZoomModalVisible(false);
 
   const [showZoomFileSelector, setShowZoomFileSelector] = React.useState(false);
-  const handleZoomDownloadComplete = () => {
-    // The ZoomModal calls this once the download is successful
-    setShowZoomFileSelector(true);
-  };
 
   const [isDownloadModalVisible, setDownloadModalVisible] =
     React.useState(false);
@@ -3251,18 +3293,6 @@ export const DmMap = (props: {
                   onClose={() => setViewModalOpen(false)}
                   sessionName={selectedSessionName}
                 />
-                <Toolbar.Item isActive>
-                  <Toolbar.Button onClick={openZoomModal}>
-                    <Icon.DownloadCloud width="20px" height="20px" />
-                    <Icon.Label>Zoom</Icon.Label>
-                  </Toolbar.Button>
-                </Toolbar.Item>
-                {isZoomModalVisible && (
-                  <ZoomModal
-                    onClose={closeZoomModal}
-                    onDownloadComplete={handleZoomDownloadComplete}
-                  />
-                )}
                 {showZoomFileSelector && (
                   <ZoomFileSelectorModal
                     onClose={() => setShowZoomFileSelector(false)}
