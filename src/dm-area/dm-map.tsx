@@ -2161,7 +2161,7 @@ const ZoomModal: React.FC<ZoomModalProps> = ({
           width: "400px",
         }}
       >
-        <h2 style={{ marginBottom: "16px" }}>Retrieve Zoom Meeting Files</h2>
+        <h2 style={smallButtonStyle}>Retrieve Zoom Meeting Files</h2>
 
         {/* Wrap your labels+inputs in a container with spacing */}
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -2329,31 +2329,10 @@ const ZoomModal: React.FC<ZoomModalProps> = ({
 
         {/* Buttons at the bottom */}
         <div style={{ marginTop: "20px", textAlign: "right" }}>
-          <button
-            onClick={handleZoomDownload}
-            style={{
-              padding: "8px 16px",
-              marginRight: "8px",
-              backgroundColor: "#007bff",
-              color: "#fff",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
+          <button onClick={handleZoomDownload} style={smallButtonStyle}>
             Retrieve
           </button>
-          <button
-            onClick={onClose}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#6c757d",
-              color: "#fff",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
+          <button onClick={onClose} style={smallButtonStyle}>
             Close
           </button>
         </div>
@@ -2485,31 +2464,10 @@ const ZoomFileSelectorModal: React.FC<ZoomFileSelectorModalProps> = ({
           </ul>
         )}
         <div style={{ marginTop: "20px", textAlign: "right" }}>
-          <button
-            onClick={handleCopySelected}
-            style={{
-              marginRight: "8px",
-              padding: "8px 16px",
-              backgroundColor: "#28a745",
-              color: "#fff",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
+          <button onClick={handleCopySelected} style={smallButtonStyle}>
             Save Selected
           </button>
-          <button
-            onClick={onClose}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#6c757d",
-              color: "#fff",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
+          <button onClick={onClose} style={smallButtonStyle}>
             Close
           </button>
         </div>
@@ -2587,18 +2545,7 @@ const SaveModal: React.FC<SaveModalProps> = ({ show, onClose }) => {
         />
         {/* New button to open the ZoomModal */}
         <div style={{ marginTop: "16px", textAlign: "center" }}>
-          <button
-            onClick={openZoomModal}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#007bff",
-              color: "#fff",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginBottom: "16px",
-            }}
-          >
+          <button onClick={openZoomModal} style={smallButtonStyle}>
             Retrieve Zoom Recordings
           </button>
         </div>

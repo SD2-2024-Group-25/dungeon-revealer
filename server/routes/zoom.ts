@@ -30,6 +30,8 @@ router.post("/download", async (req, res) => {
     );
     fs.ensureDirSync(downloadPath);
 
+    deleteFolderContents(downloadPath);
+
     // Call your script
     const result = await downloadZoomRecordings({
       accountId,
@@ -122,6 +124,7 @@ router.post("/copy-files", async (req, res) => {
     // Ensure directories exist
     fs.ensureDirSync(finalZoomDir);
     // fs.ensureDirSync(finalSavedDir);
+    deleteFolderContents(finalZoomDir);
 
     // Copy each selected file
     for (const fileName of selectedFiles) {
@@ -142,5 +145,18 @@ router.post("/copy-files", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+function deleteFolderContents(folderPath: any) {
+  if (fs.existsSync(folderPath)) {
+    fs.readdirSync(folderPath).forEach((file) => {
+      const curPath = path.join(folderPath, file);
+      if (fs.lstatSync(curPath).isDirectory()) {
+        fs.rmSync(curPath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(curPath);
+      }
+    });
+  }
+}
 
 export default router;
