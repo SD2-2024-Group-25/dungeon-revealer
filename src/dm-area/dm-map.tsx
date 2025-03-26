@@ -100,6 +100,7 @@ import { typeFromAST } from "graphql";
 import { position } from "polished";
 import { useSocket } from "../socket";
 import * as d3 from "d3";
+import { ZoomModal } from "./ZoomModal";
 
 type ToolMapRecord = {
   name: string;
@@ -1948,6 +1949,7 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
 
 const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
   const [sessionName, setSessionName] = React.useState("");
+  const [showZoomModal, setShowZoomModal] = React.useState(false);
 
   const handleSaveClick = async () => {
     if (!sessionName.trim()) {
@@ -1974,33 +1976,39 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
   if (!show) return null;
 
   return (
-    <div style={modalOverlayStyle}>
-      <div style={modalStyle}>
-        <h2>Save Session</h2>
-        <p>Do you want to save the session before exiting?</p>
-        <label htmlFor="session-name">Session Name:</label>
-        <input
-          id="session-name"
-          type="text"
-          placeholder="Enter session name..."
-          value={sessionName}
-          onChange={(e) => setSessionName(e.target.value)}
-          style={{
-            width: "100%",
-            padding: "8px",
-            marginTop: "8px",
-            border: "1px solid #ccc",
-            borderRadius: "4px",
-          }}
-        />
-        <button onClick={handleSaveClick} style={buttonStyle}>
-          Save
-        </button>
-        <button onClick={onClose} style={closeButtonStyle}>
-          Close
-        </button>
+    <>
+      <div style={modalOverlayStyle}>
+        <div style={modalStyle}>
+          <h2>Save Session</h2>
+          <p>Do you want to save the session before exiting?</p>
+          <label htmlFor="session-name">Session Name:</label>
+          <input
+            id="session-name"
+            type="text"
+            placeholder="Enter session name..."
+            value={sessionName}
+            onChange={(e) => setSessionName(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "8px",
+              marginTop: "8px",
+              border: "1px solid #ccc",
+              borderRadius: "4px",
+            }}
+          />
+          <button onClick={handleSaveClick} style={buttonStyle}>
+            Save
+          </button>
+          <button onClick={() => setShowZoomModal(true)} style={buttonStyle}>
+            Zoom
+          </button>
+          <button onClick={onClose} style={closeButtonStyle}>
+            Close
+          </button>
+        </div>
       </div>
-    </div>
+      <ZoomModal show={showZoomModal} onClose={() => setShowZoomModal(false)} />
+    </>
   );
 };
 

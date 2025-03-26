@@ -33,6 +33,7 @@ const grabIterationDataRoutes = require("./routes/grabIterationData"); //Defines
 const selectMapRoutes = require("./routes/selectMap"); //Defines the route for api's in select_map_modal.tsx
 //const { parse } = require("json2csv");
 import archiver from "archiver";
+import axios from "axios";
 
 type RequestWithRole = Request & { role: string | null };
 type ErrorWithStatus = Error & { status: number };
@@ -58,6 +59,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   const settings = new Settings({ dataDirectory: env.DATA_DIRECTORY });
   const researchPath = path.join(__dirname, "..", "public", "research");
   const notes_folder = path.join(researchPath, "notes");
+  const sourceZoomFolder = path.join(researchPath, "downloads", "zoom");
   const fileStorage = new FileStorage({
     dataDirectory: env.DATA_DIRECTORY,
     db,
@@ -297,6 +299,368 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       res.sendFile(settingsPath);
     }
   );
+
+  app.post("/api/load-zoom", async (req, res) => {
+    const zoomData = req.body;
+
+    try {
+      await loadZoomData({
+        accountId: zoomData.accountId,
+        clientId: zoomData.clientId,
+        clientSecret: zoomData.clientSecret,
+        monthFrom: zoomData.monthFrom,
+        monthTo: zoomData.monthTo,
+        year: zoomData.year,
+        usersFilter: zoomData.userFilter,
+      });
+
+      res.status(200).json({ message: "Zoom data loaded successfully." });
+    } catch (err) {
+      console.error("Zoom load failed");
+      res.status(500).json({ error: "Zoom load failed" });
+    }
+  });
+
+  async function getAccessToken(
+    accountId: any,
+    clientId: any,
+    clientSecret: any
+  ) {
+    const baseUrl = "https://zoom.us/oauth/token";
+    const authString = Buffer.from(`${clientId}:${clientSecret}`).toString(
+      "base64"
+    );
+
+    const headers = {
+      Authorization: `Basic ${authString}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    };
+
+    const data = new URLSearchParams({
+      grant_type: "account_credentials",
+      account_id: accountId,
+    });
+
+    try {
+      const response = await axios.post(baseUrl, data, { headers });
+      return response.data.access_token;
+    } catch (error) {
+      console.error("Failed to get access token:", error);
+      throw new Error(
+        "Failed to get access token. Check your account credentials."
+      );
+    }
+  }
+
+  async function getAllUsers(accessToken: any) {
+    const baseUrl = "https://api.zoom.us/v2/users";
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    };
+
+    let usersList: any[] = [];
+    let nextPageToken = null;
+
+    do {
+      const params: any = {
+        page_size: 300,
+        next_page_token: nextPageToken,
+      };
+
+      try {
+        const response = await axios.get(baseUrl, { headers, params });
+        usersList = usersList.concat(response.data.users);
+        nextPageToken = response.data.next_page_token;
+      } catch (error) {
+        console.error("Failed to fetch users list:", error);
+        throw new Error("Failed to fetch users list. Check your access token.");
+      }
+    } while (nextPageToken);
+
+    return usersList;
+  }
+
+  function getFirstAndLastDay(year: any, month: any) {
+    if (month < 1 || month > 12) {
+      throw new Error("Month should be between 1 and 12.");
+    }
+
+    const fromDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const toDate = `${year}-${String(month).padStart(2, "0")}-${String(
+      lastDay
+    ).padStart(2, "0")}`;
+
+    return { fromDate, toDate };
+  }
+
+  async function getAllRecordings(
+    year: any,
+    month: any,
+    accessToken: any,
+    userId: any
+  ) {
+    const { fromDate, toDate } = getFirstAndLastDay(year, month);
+    const baseUrl = `https://api.zoom.us/v2/users/${userId}/recordings`;
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    };
+
+    let recordingsList: any[] = [];
+    let nextPageToken = null;
+
+    do {
+      const params: any = {
+        page_size: 300,
+        from: fromDate,
+        to: toDate,
+        next_page_token: nextPageToken,
+      };
+
+      try {
+        const response = await axios.get(baseUrl, { headers, params });
+        recordingsList = recordingsList.concat(response.data.meetings);
+        nextPageToken = response.data.next_page_token;
+      } catch (error) {
+        console.error(`Failed to fetch recordings for user ${userId}:`, error);
+        throw new Error(
+          `Failed to fetch recordings for user ${userId}. Check your access token.`
+        );
+      }
+    } while (nextPageToken);
+
+    return recordingsList;
+  }
+
+  function formatGmtDateTime(gmtDateTime: any) {
+    const date = new Date(gmtDateTime);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    const hours = String(date.getUTCHours()).padStart(2, "0");
+    const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+    const seconds = String(date.getUTCSeconds()).padStart(2, "0");
+
+    return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+  }
+
+  function convertToGmtTime(relativeTime: any, meetingStartTime: any) {
+    const meetingStart = new Date(meetingStartTime);
+    const gmtTime = new Date(meetingStart.getTime() + relativeTime * 1000);
+    return gmtTime.toISOString().slice(11, 23); // Extract HH:MM:SS.mmm
+  }
+
+  function parseTimeToSeconds(timeString: any) {
+    const [hh, mm, ssmmm] = timeString.split(":");
+    const [ss, mmm] = ssmmm.split(".");
+    return (
+      parseInt(hh) * 3600 +
+      parseInt(mm) * 60 +
+      parseInt(ss) +
+      parseFloat(`0.${mmm}`)
+    );
+  }
+
+  function modifyTranscriptFile(filePath: any, meetingStartTime: any) {
+    const transcriptContent = fs.readFileSync(filePath, "utf8");
+    const lines = transcriptContent.split("\n");
+    let modifiedContent = "";
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Check if the line contains a timestamp
+      const timestampRegex =
+        /(\d{2}:\d{2}:\d{2}\.\d{3}) --> (\d{2}:\d{2}:\d{2}\.\d{3})/;
+      const match = line.match(timestampRegex);
+
+      if (match) {
+        // Extract relative start and end times
+        const relativeStartTime = match[1];
+        const relativeEndTime = match[2];
+
+        // Convert relative times to seconds
+        const startTimeInSeconds = parseTimeToSeconds(relativeStartTime);
+        const endTimeInSeconds = parseTimeToSeconds(relativeEndTime);
+
+        // Convert to GMT time
+        const gmtStartTime = convertToGmtTime(
+          startTimeInSeconds,
+          meetingStartTime
+        );
+        const gmtEndTime = convertToGmtTime(endTimeInSeconds, meetingStartTime);
+
+        // Replace the relative timestamps with GMT timestamps
+        const modifiedLine = line.replace(
+          timestampRegex,
+          `${gmtStartTime} --> ${gmtEndTime}`
+        );
+        modifiedContent += modifiedLine + "\n";
+      } else {
+        modifiedContent += line + "\n";
+      }
+    }
+
+    // Write the modified content back to the file
+    fs.writeFileSync(filePath, modifiedContent, "utf8");
+    console.log(`Modified transcript file: ${filePath}`);
+  }
+
+  async function downloadZoomRecording(
+    accessToken: any,
+    recordingName: string,
+    downloadUrl: string,
+    fileType: string,
+    meetingStartTime: any
+  ) {
+    const gmtDateTime = formatGmtDateTime(meetingStartTime);
+    const filename = `${gmtDateTime}_${recordingName.replace(/\W+/g, "_")}`; // Replace non-alphanumeric characters with underscores
+
+    // Add file extension based on file type
+    let filePath;
+    if (fileType === "MP4") {
+      filePath = path.join(sourceZoomFolder, `${filename}.mp4`);
+    } else if (fileType === "TRANSCRIPT") {
+      filePath = path.join(sourceZoomFolder, `${filename}.vtt`); // Transcripts are usually in VTT format
+    } else {
+      console.error(`Unsupported file type: ${fileType}`);
+      return false;
+    }
+
+    if (fs.existsSync(filePath)) {
+      console.log(`Recording ${filePath} exists, skipped.`);
+      return true;
+    } else {
+      console.log(`Recording ${filePath} does not exist.`);
+    }
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    };
+
+    try {
+      const response = await axios.get(downloadUrl, {
+        headers,
+        responseType: "stream",
+      });
+      const writer = fs.createWriteStream(filePath);
+      response.data.pipe(writer);
+
+      await new Promise((resolve, reject) => {
+        writer.on("finish", resolve);
+        writer.on("error", reject);
+      });
+
+      console.log(`Recording downloaded successfully as ${filePath}.`);
+
+      // If the file is a transcript, modify its timestamps
+      if (fileType === "TRANSCRIPT") {
+        modifyTranscriptFile(filePath, meetingStartTime);
+      }
+
+      return true;
+    } catch (error) {
+      console.error(`Failed to download recording: ${filePath}`, error);
+      return false;
+    }
+  }
+
+  async function loadZoomData(zoomData: any) {
+    if (fs.existsSync("users_list_cache.json")) {
+      fs.unlinkSync("users_list_cache.json");
+    }
+    if (fs.existsSync("recordings_dict_cache.json")) {
+      fs.unlinkSync("recordings_dict_cache.json");
+    }
+
+    const accessToken = await getAccessToken(
+      zoomData.accountId,
+      zoomData.clientId,
+      zoomData.clientSecret
+    );
+
+    let usersList;
+    if (fs.existsSync("users_list_cache.json")) {
+      usersList = JSON.parse(fs.readFileSync("users_list_cache.json", "utf8"));
+    } else {
+      usersList = await getAllUsers(accessToken);
+      fs.writeFileSync("users_list_cache.json", JSON.stringify(usersList));
+    }
+
+    let recordingsList: any = {};
+    if (fs.existsSync("recordings_dict_cache.json")) {
+      recordingsList = JSON.parse(
+        fs.readFileSync("recordings_dict_cache.json", "utf8")
+      );
+    } else {
+      for (const user of usersList) {
+        if (!zoomData.userFilter || zoomData.userFilter.includes(user.email)) {
+          const userId = user.id;
+          recordingsList[userId] = [];
+
+          for (
+            let month = zoomData.monthFrom;
+            month < zoomData.monthTo;
+            month++
+          ) {
+            recordingsList[userId] = recordingsList[userId].concat(
+              await getAllRecordings(zoomData.year, month, accessToken, userId)
+            );
+          }
+        }
+      }
+      fs.writeFileSync(
+        "recordings_dict_cache.json",
+        JSON.stringify(recordingsList)
+      );
+    }
+
+    for (const userId in recordingsList) {
+      const recordings = recordingsList[userId];
+      for (const recording of recordings) {
+        const recordingName = recording.topic;
+        const recordingFiles = recording.recording_files;
+        const meetingStartTime = recording.start_time; // Use the meeting start time
+
+        for (const file of recordingFiles) {
+          if (file.recording_type !== "audio_only") {
+            const recordingNameWithId = `${recordingName}_${file.id}`;
+            const downloadUrl = file.download_url;
+            const fileType = file.file_type;
+
+            // Check if the recording still exists before downloading
+            try {
+              const response = await axios.head(downloadUrl, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              if (response.status === 200) {
+                await downloadZoomRecording(
+                  accessToken,
+                  recordingNameWithId,
+                  downloadUrl,
+                  fileType,
+                  meetingStartTime
+                );
+              } else {
+                console.log(
+                  `Recording ${recordingNameWithId} no longer exists, skipped.`
+                );
+              }
+            } catch (error) {
+              console.error(
+                `Failed to check recording ${recordingNameWithId}:`,
+                error
+              );
+            }
+          }
+        }
+      }
+    }
+    console.log(zoomData);
+  }
 
   app.post("/api/recording", (req, res) => {
     const filePath = path.join(researchPath, "settings.json");

@@ -1,6 +1,9 @@
 .idea
 .env
 
+recordings_dict_cache.json
+users_list_cache.json
+
 # Compiled source #
 ###################
 *.com
