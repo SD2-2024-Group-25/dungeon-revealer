@@ -97,6 +97,7 @@ import { IsDungeonMasterContext } from "../is-dungeon-master-context";
 import { LazyLoadedMapView } from "../lazy-loaded-map-view";
 import { typeFromAST } from "graphql";
 import { position } from "polished";
+import ClearIcon from "@mui/icons-material/Clear";
 
 type ToolMapRecord = {
   name: string;
@@ -104,6 +105,40 @@ type ToolMapRecord = {
   tool: MapTool;
   MenuComponent: null | (() => React.ReactElement);
 };
+
+async function getSvgDimensions(svgUrl: string) {
+  try {
+    const response = await fetch(svgUrl);
+    const svgText = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, "image/svg+xml");
+    const svgEl = doc.querySelector("svg");
+    if (!svgEl) {
+      console.warn("No <svg> element found, using fallback dimensions.");
+      return { width: 800, height: 600 }; //Fallback values
+    }
+    let width = svgEl.getAttribute("width");
+    let height = svgEl.getAttribute("height");
+
+    //if missing, try to derive dimensions from the viewBox
+    const viewBox = svgEl.getAttribute("viewBox");
+    if ((!width || !height) && viewBox) {
+      const parts = viewBox.split(" ").map(Number);
+      if (parts.length === 4) {
+        width = parts[2].toString();
+        height = parts[3].toString();
+      }
+    }
+
+    return {
+      width: Number(width) || 800,
+      height: Number(height) || 600,
+    };
+  } catch (e) {
+    console.error("Error fetching SVG dimensions:", e);
+    return { width: 800, height: 600 };
+  }
+}
 
 const BrushSettings = (): React.ReactElement => {
   const { state, setState } = React.useContext(BrushToolContext);
@@ -754,6 +789,12 @@ const ViewModal: React.FC<ViewModalProps> = ({
 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState<boolean>(true);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const [showGrid, setShowGrid] = React.useState<boolean>(false);
+  const [canvasSize, setCanvasSize] = React.useState<{
+    width: number;
+    height: number;
+  }>({ width: 800, height: 600 });
+  const [playerView, setPlayerView] = React.useState<boolean>(true);
 
   // Fetch sessions if modal is shown and no session is selected
   React.useEffect(() => {
@@ -830,39 +871,66 @@ const ViewModal: React.FC<ViewModalProps> = ({
           const settings = await settingsResponse.json();
           console.log("Fetched settings:", settings);
 
-          const dynamicMapName = settings.mapPath || "map.jpg";
-          const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}/${dynamicMapName}`;
+          //base map image url
+          const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}`;
           console.log("Loading map image from:", mapImageUrl);
-
           const mapImage = new Image();
           mapImage.src = mapImageUrl;
 
-          mapImage.onload = () => {
-            const canvas = canvasRef.current;
+          mapImage.onload = async () => {
+            //just added and made map.ImageOnload async
+            let imgWidth = mapImage.naturalWidth;
+            let imgHeight = mapImage.naturalHeight;
 
+            if (
+              mapImage.src.toLowerCase().endsWith(".svg") &&
+              (!imgWidth || !imgHeight)
+            ) {
+              const dimensions = await getSvgDimensions(mapImage.src);
+              imgWidth = dimensions.width;
+              imgHeight = dimensions.height;
+            }
+
+            if (imgWidth > 800 || imgHeight > 600) {
+              const scale = Math.min(800 / imgWidth, 600 / imgHeight);
+              imgWidth = Math.floor(imgWidth * scale);
+              imgHeight = Math.floor(imgHeight * scale);
+            }
+
+            setCanvasSize({ width: imgWidth, height: imgHeight });
+
+            const canvas = canvasRef.current;
             if (!canvas) {
-              console.error("Canvas element is not available.");
               return;
             }
+            canvas.width = imgWidth;
+            canvas.height = imgHeight;
+
             //creating the canvas so the map can be drawn on
             const ctx = canvas.getContext("2d");
-
             if (!ctx) {
               console.error("Unable to get 2D context from canvas.");
               return;
             }
-
             //clears the canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            if (
+              mapImage.src.toLowerCase().endsWith(".svg") &&
+              (!imgWidth || !imgHeight)
+            ) {
+              const dimensions = await getSvgDimensions(mapImage.src);
+              imgWidth = dimensions.width;
+              imgHeight = dimensions.height;
+            }
+
             const scale = Math.min(
-              canvas.width / mapImage.naturalWidth,
-              canvas.height / mapImage.naturalHeight
+              canvas.width / imgWidth,
+              canvas.height / imgHeight
             );
 
-            //calculate scale factor to maintain aspect ratio
-            const drawWidth = mapImage.naturalWidth * scale;
-            const drawHeight = mapImage.naturalHeight * scale;
+            const drawWidth = imgWidth * scale;
+            const drawHeight = imgHeight * scale;
 
             //calculate offsets to center the image in the canvas
             const offsetX = (canvas.width - drawWidth) / 2;
@@ -874,91 +942,129 @@ const ViewModal: React.FC<ViewModalProps> = ({
             ctx.translate(offsetX, offsetY);
             ctx.scale(scale, scale);
 
-            //drawing the image at its original dimensions
-            ctx.drawImage(
-              mapImage,
-              0,
-              0,
-              mapImage.naturalWidth,
-              mapImage.naturalHeight
-            );
+            //drawing the base map image at its original dimensions
+            ctx.drawImage(mapImage, 0, 0, imgWidth, imgHeight);
             console.log("Map image drawn to canvas with transformation.");
 
-            //drawing a grid overlay using the original coordinates
-            const gridSpacing = 50;
-            ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
-            ctx.lineWidth = 1;
-            for (let x = 0; x <= mapImage.naturalWidth; x += gridSpacing) {
-              ctx.beginPath();
-              ctx.moveTo(x, 0);
-              ctx.lineTo(x, mapImage.naturalHeight);
-              ctx.stroke();
+            //Load and draw fog layers
+            const loadImage = (url: string): Promise<HTMLImageElement> =>
+              new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = () =>
+                  reject(new Error(`Filed to load image at ${url}`));
+                img.src = url;
+              });
+
+            //construct fog image urls
+            const fogLiveUrl = `${mapImageUrl}/fog.live.png`;
+            const fogProgressUrl = `${mapImageUrl}/fog.progress.png`;
+            let fogLiveImg: HTMLImageElement | null = null;
+            let fogprogressIMG: HTMLImageElement | null = null;
+            try {
+              fogLiveImg = await loadImage(fogLiveUrl);
+              console.log("Fog live layer loaded.");
+            } catch (e) {
+              console.warn("Fog live image not found:", e);
             }
-            for (let y = 0; y <= mapImage.naturalHeight; y += gridSpacing) {
-              ctx.beginPath();
-              ctx.moveTo(0, y);
-              ctx.lineTo(mapImage.naturalWidth, y);
-              ctx.stroke();
+            try {
+              fogprogressIMG = await loadImage(fogProgressUrl);
+              console.log("Fog progress layer loaded.");
+            } catch (e) {
+              console.warn("Fog progress image not found:", e);
+            }
+
+            if (playerView) {
+              //Draw fog layers
+              if (fogLiveImg) {
+                ctx.drawImage(fogLiveImg, 0, 0, imgWidth, imgHeight);
+                console.log("Fog live layer drawn");
+              }
+            } else if (!playerView) {
+              if (fogprogressIMG) {
+                ctx.drawImage(fogprogressIMG, 0, 0, imgWidth, imgHeight);
+                console.log("Fog progress layer drawn");
+              }
+            }
+
+            if (showGrid) {
+              //drawing a grid overlay using the original coordinates
+              const gridSpacing = 50;
+              ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
+              ctx.lineWidth = 1;
+              for (let x = 0; x <= mapImage.naturalWidth; x += gridSpacing) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, mapImage.naturalHeight);
+                ctx.stroke();
+              }
+              for (let y = 0; y <= mapImage.naturalHeight; y += gridSpacing) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(mapImage.naturalWidth, y);
+                ctx.stroke();
+              }
             }
 
             if (settings.tokens && Array.isArray(settings.tokens)) {
               settings.tokens.forEach((token: any) => {
-                //if the token contains an image
-                if (token.tokenImageId) {
-                  //if token with image has a label
-                  if (token.label) {
-                    const nonscaledFontSize = 14;
-                    ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "bottom";
+                if (!playerView || token.isVisibleToPlayers) {
+                  //if the token contains an image
+                  if (token.tokenImageId) {
+                    //if token with image has a label
+                    if (token.label) {
+                      const nonscaledFontSize = 14;
+                      ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
+                      ctx.textAlign = "center";
+                      ctx.textBaseline = "bottom";
 
-                    const textMetrics = ctx.measureText(token.label);
-                    const textWidth = textMetrics.width;
-                    const textHeight = nonscaledFontSize / scale;
+                      const textMetrics = ctx.measureText(token.label);
+                      const textWidth = textMetrics.width;
+                      const textHeight = nonscaledFontSize / scale;
 
-                    ctx.fillStyle = "white";
-                    ctx.fillRect(
-                      token.x - textWidth / 2 - (textWidth * 0.05) / 2,
-                      token.y + (token.radius - textHeight * 0.1),
-                      textWidth + textWidth * 0.05,
-                      textHeight + textHeight * 0.05
-                    );
+                      ctx.fillStyle = "white";
+                      ctx.fillRect(
+                        token.x - textWidth / 2 - (textWidth * 0.05) / 2,
+                        token.y + (token.radius - textHeight * 0.1),
+                        textWidth + textWidth * 0.05,
+                        textHeight + textHeight * 0.05
+                      );
 
-                    ctx.fillStyle = "#000";
-                    ctx.textAlign = "center";
-                    ctx.fillText(
-                      token.label,
-                      token.x,
-                      token.y +
-                        token.radius +
-                        (token.radius / 2 - textHeight * 0.05)
-                    );
+                      ctx.fillStyle = "#000";
+                      ctx.textAlign = "center";
+                      ctx.fillText(
+                        token.label,
+                        token.x,
+                        token.y +
+                          token.radius +
+                          (token.radius / 2 - textHeight * 0.05)
+                      );
+                    }
+
+                    const tokenImage = new Image();
+                    //circle for token is created
+                    ctx.beginPath();
+                    ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = token.color;
+                    ctx.fill();
+                    ctx.closePath();
                   }
+                  //if the token doesnt contain an image draw circle only
+                  else {
+                    ctx.beginPath();
+                    ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = token.color;
+                    ctx.fill();
+                    ctx.closePath();
 
-                  const tokenImage = new Image();
-                  //tokenImage.src =
-                  //circle for token is created
-                  ctx.beginPath();
-                  ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
-                  ctx.fillStyle = token.color;
-                  ctx.fill();
-                  ctx.closePath();
-                }
-                //if the token doesnt contain an image draw circle only
-                else {
-                  ctx.beginPath();
-                  ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
-                  ctx.fillStyle = token.color;
-                  ctx.fill();
-                  ctx.closePath();
-
-                  if (token.label) {
-                    const nonscaledFontSize = 14;
-                    ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
-                    ctx.fillStyle = "#000";
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "middle";
-                    ctx.fillText(token.label, token.x, token.y);
+                    if (token.label) {
+                      const nonscaledFontSize = 14;
+                      ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
+                      ctx.fillStyle = "#000";
+                      ctx.textAlign = "center";
+                      ctx.textBaseline = "middle";
+                      ctx.fillText(token.label, token.x, token.y);
+                    }
                   }
                 }
               });
@@ -966,7 +1072,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
             } else {
               console.log("No tokens found in settings.");
             }
-
             ctx.restore();
           };
 
@@ -979,28 +1084,37 @@ const ViewModal: React.FC<ViewModalProps> = ({
       };
       drawMapWithTokens();
     }
-  }, [show, selectedIteration, sessionName]);
+  }, [show, selectedIteration, sessionName, showGrid, playerView]);
 
   if (!show) return null;
 
   return (
     <div style={viewModalOverlayStyle}>
       <div style={viewModalStyle}>
-        {/* A button to toggle the sidebar */}
-        <button
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        {/* the right panel and left sidebar div */}
+        <div
           style={{
-            position: "absolute",
-            left: isSidebarOpen ? "225px" : "10px",
-            cursor: "pointer",
-            overflow: "hidden",
-            transition: "width 0.3s ease",
+            display: "flex",
+            height: "calc(100% - 40px)",
+            border: "1px solid #ccc",
           }}
         >
-          {isSidebarOpen ? "Close" : "Open"}
-        </button>
+          {/* button to toggle the sidebar */}
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            style={{
+              position: "absolute",
+              left: isSidebarOpen ? "225px" : "10px",
+              cursor: "pointer",
+              overflow: "hidden",
+              transition: "width 0.3s ease",
+              zIndex: 9999,
+            }}
+          >
+            {isSidebarOpen ? "Close" : "Open"}
+          </button>
 
-        <div style={{ display: "flex", height: "calc(100% - 40px)" }}>
+          {/*  <div style={{ display: "flex", height: "calc(100% - 40px)" }}> */}
           {/* Left Sidebar */}
           {isSidebarOpen && (
             <div
@@ -1051,32 +1165,48 @@ const ViewModal: React.FC<ViewModalProps> = ({
               )}
             </div>
           )}
+
           {/* Right Panel */}
           <div
             style={{
               flex: 1,
+              position: "relative",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              padding: "10px",
+              justifyContent: "center",
+              border: "1px solid #ccc",
             }}
           >
             {sessionName ? (
               <>
-                <h2>{sessionName}</h2>
+                <h2 style={{ textAlign: "center", margin: "10px 0" }}>
+                  {sessionName}
+                </h2>
+
                 {selectedIteration ? (
                   <>
-                    <h3>{selectedIteration}</h3>
-                    <canvas
-                      ref={canvasRef}
-                      width={800}
-                      height={600}
+                    <h3 style={{ textAlign: "center", margin: "5px 0" }}>
+                      {selectedIteration}
+                    </h3>
+
+                    <div
                       style={{
-                        maxWidth: "100%",
-                        height: "calc(100% - 40px)",
-                        objectFit: "contain",
+                        position: "relative",
+                        width: `${canvasSize.width}.px`,
+                        overflow: "auto",
+                        border: "1px solid #ccc",
                       }}
-                    />
+                    >
+                      {/* Scrollable container for map */}
+                      <canvas
+                        ref={canvasRef}
+                        style={{
+                          border: "1px solid #ccc",
+                          width: `${canvasSize.width}.px`,
+                        }}
+                      />
+                    </div>
                   </>
                 ) : (
                   <p>Please select an iteration</p>
@@ -1085,11 +1215,67 @@ const ViewModal: React.FC<ViewModalProps> = ({
             ) : (
               <p>Please select a session</p>
             )}
+
+            {/* the right panel and left sidebar div */}
+
+            {/* The grid toggle on the right side */}
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                right: "20px",
+                transform: "translateY(-50%)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                alignItems: "center",
+              }}
+            >
+              <div style={{ display: "flex" }}>
+                <button
+                  style={playerView ? activeSegmentStyle : inactiveSegmentStyle}
+                  onClick={() => setPlayerView(true)}
+                >
+                  Player View
+                </button>
+                <button
+                  style={playerView ? inactiveSegmentStyle : activeSegmentStyle}
+                  onClick={() => setPlayerView(false)}
+                >
+                  DM View
+                </button>
+              </div>
+
+              {/* Grid toggle button */}
+              <div style={{ display: "flex" }}>
+                <button
+                  style={showGrid ? inactiveSegmentStyle : activeSegmentStyle}
+                  onClick={() => setShowGrid(false)}
+                >
+                  Grid Off
+                </button>
+                <button
+                  style={showGrid ? activeSegmentStyle : inactiveSegmentStyle}
+                  onClick={() => setShowGrid(true)}
+                >
+                  Grid On
+                </button>
+              </div>
+
+              {/* the new right panel div end */}
+            </div>
           </div>
+
+          <div>
+            <button onClick={onClose} style={viewCloseButtonStyle}>
+              <span style={{ marginRight: "5px", fontSize: "30px" }}>
+                &times;
+              </span>
+            </button>
+          </div>
+
+          {/* this is the one- last div you worked with! */}
         </div>
-        <button onClick={onClose} style={viewCloseButtonStyle}>
-          Close
-        </button>
       </div>
     </div>
   );
@@ -1153,6 +1339,27 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
   );
 };
 
+const activeSegmentStyle: React.CSSProperties = {
+  backgroundColor: "#666",
+  color: "#fff",
+  padding: "0.5rem 1rem",
+  width: "100px",
+  //borderRadius: "15px",
+  //border: 'none',
+  cursor: "pointer",
+};
+
+const inactiveSegmentStyle: React.CSSProperties = {
+  backgroundColor: "#fff",
+  color: "#000",
+  padding: "0.5rem 1rem",
+  width: "100px",
+  //sborder: "1px solid #ccc",
+  //borderRadius: "15px",
+  //border: 'none',
+  cursor: "pointer",
+};
+
 const viewModalOverlayStyle: React.CSSProperties = {
   position: "fixed",
   top: 0,
@@ -1198,8 +1405,8 @@ const modalStyle: React.CSSProperties = {
 };
 
 const listContainerStyle: React.CSSProperties = {
-  maxHeight: "200px", // Set a max height for the list container
-  overflowY: "auto", // Enable scrolling within the list container
+  maxHeight: "200px",
+  overflowY: "auto",
   marginBottom: "10px",
 };
 
@@ -1232,16 +1439,10 @@ const closeButtonStyle: React.CSSProperties = {
 
 const viewCloseButtonStyle: React.CSSProperties = {
   position: "absolute",
-  bottom: "20px",
-  left: "50%",
-  transform: "translateX(-50%)",
-  //right: "10px",
-  //padding: "5px 10px",
-  //marginTop: "20px",
-  //padding: "10px 15px",
+  right: "10px",
+  top: "5px",
   cursor: "pointer",
 };
-
 export const DmMap = (props: {
   map: dmMap_DMMapFragment$key;
   password: string;
@@ -1857,6 +2058,7 @@ const GridConfigurator = (props: {
       position="absolute"
       bottom="12px"
       right="12px"
+      P
       width="100%"
       maxWidth="500px"
       borderRadius="12px"

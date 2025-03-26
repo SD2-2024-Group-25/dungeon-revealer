@@ -221,6 +221,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
+  //retrieves iteration list for a specific session
   apiRouter.get("/list-iterations/:folder", async (req, res) => {
     const folderName = req.params.folder; // Dynamically get folder name
     const targetFolderPath = path.join(researchPath, "saved", folderName);
@@ -248,25 +249,57 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   });
 
   //retrieves map file for a specific iteration
-  apiRouter.get(
-    "/iteration/:sessionName/:iterationName/:map",
-    async (req, res) => {
-      const { sessionName, iterationName } = req.params;
+  apiRouter.get("/iteration/:sessionName/:iterationName", async (req, res) => {
+    const { sessionName, iterationName } = req.params;
 
-      const mapFilePath = path.join(
+    const fileExtensions = ["jpg", "jpeg", "svg", "png"];
+    let mapFilePath = null;
+
+    for (const ext of fileExtensions) {
+      const possibleMapPath = path.join(
         researchPath,
         "saved",
         sessionName,
         iterationName,
-        "map.jpg"
+        `map.${ext}`
+      );
+      console.log("Checking:", possibleMapPath);
+      if (fs.existsSync(possibleMapPath)) {
+        mapFilePath = possibleMapPath;
+        break;
+      }
+    }
+
+    if (!mapFilePath) {
+      console.error(
+        "Map file not found for session:",
+        sessionName,
+        iterationName
+      );
+      return res.status(404).json({ error: "Map file not found " });
+    }
+    res.sendFile(mapFilePath);
+  });
+
+  //retrieves fog progress and fog live file for a specific iteration
+  apiRouter.get(
+    "/iteration/:sessionName/:iterationName/:fileName",
+    async (req, res) => {
+      const { sessionName, iterationName, fileName } = req.params;
+      const filePath = path.join(
+        researchPath,
+        "saved",
+        sessionName,
+        iterationName,
+        fileName
       );
 
-      if (!fs.existsSync(mapFilePath)) {
-        console.error("File not found:", mapFilePath);
-        return res.status(404).json({ error: "map.jpg not found" });
+      console.log("Checking fog file:", filePath);
+      if (!fs.existsSync(filePath)) {
+        console.error("File not found:", filePath);
+        return res.status(404).json({ error: `${fileName} not found` });
       }
-
-      res.sendFile(mapFilePath);
+      res.sendFile(filePath);
     }
   );
 
