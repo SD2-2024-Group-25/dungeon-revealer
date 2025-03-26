@@ -24,6 +24,7 @@ import type {
   RequestHandler,
   Request,
 } from "express-serve-static-core";
+import zoomRoutes from "./routes/zoom";
 
 let maps: Maps | null = null;
 
@@ -455,6 +456,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
     const destinationFolder = path.join(savedPath, finalFolderName);
     const sourceSessionFolder = path.join(researchPath, "downloads", "session");
+    const sourceZoomFolder = path.join(researchPath, "downloads", "zoom");
     const sourceNotesFolder = path.join(researchPath, "notes");
     const destinationNotesFolder = path.join(destinationFolder, "notes");
     const sourceWhiteboardFolder = path.join(researchPath, "whiteboard");
@@ -462,6 +464,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       destinationFolder,
       "whiteboard"
     );
+    const selectedZoomFolder = path.join(researchPath, "zoom");
+    const destinationZoomFolder = path.join(destinationFolder, "zoom_data");
 
     try {
       if (!fs.existsSync(sourceSessionFolder)) {
@@ -480,10 +484,13 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
       copyFolderRecursive(sourceNotesFolder, destinationNotesFolder);
       copyFolderRecursive(sourceWhiteboardFolder, destinationWhiteboardFolder);
+      copyFolderRecursive(selectedZoomFolder, destinationZoomFolder);
 
       deleteFolderContents(sourceSessionFolder);
       deleteFolderContents(sourceNotesFolder);
       deleteFolderContents(sourceWhiteboardFolder);
+      deleteFolderContents(selectedZoomFolder);
+      deleteFolderContents(sourceZoomFolder);
 
       console.log(`Session saved: ${finalFolderName}`);
       res
@@ -715,6 +722,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   apiRouter.use(fileRouter);
   app.use(graphqlRouter);
   apiRouter.use(notesImportRouter);
+
+  apiRouter.use("/zoom", zoomRoutes);
 
   app.use("/api", apiRouter);
 

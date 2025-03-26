@@ -2086,20 +2086,419 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
   );
 };
 
-const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
+interface ZoomModalProps {
+  onClose: () => void;
+  onDownloadComplete: () => void;
+}
+
+const ZoomModal: React.FC<ZoomModalProps> = ({
+  onClose,
+  onDownloadComplete,
+}) => {
+  const [accountId, setAccountId] = React.useState("");
+  const [clientId, setClientId] = React.useState("");
+  const [clientSecret, setClientSecret] = React.useState("");
+  const [recordingYear, setRecordingYear] = React.useState("");
+  const [monthFrom, setMonthFrom] = React.useState("");
+  const [monthTo, setMonthTo] = React.useState("");
+  const [userEmail, setUserEmail] = React.useState("");
+
+  const handleZoomDownload = async () => {
+    alert("Your Zoom download is starting. This may take a moment...");
+
+    const payload = {
+      accountId,
+      clientId,
+      clientSecret,
+      recordingYear,
+      monthFrom,
+      monthTo,
+      userEmail,
+    };
+
+    if (!userEmail.trim()) {
+      alert("Please enter your Zoom email.");
+      return;
+    }
+
+    const response = await fetch("/api/zoom/download", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok) {
+      onDownloadComplete();
+    } else {
+      // handle error
+      const errorData = await response.json();
+      alert("Zoom download failed: " + errorData.error);
+      return;
+    }
+    onClose();
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1001,
+      }}
+    >
+      <div
+        style={{
+          background: "white",
+          padding: "20px",
+          borderRadius: "8px",
+          width: "400px",
+        }}
+      >
+        <h2 style={smallButtonStyle}>Retrieve Zoom Meeting Files</h2>
+
+        {/* Wrap your labels+inputs in a container with spacing */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Zoom Email:
+            </label>
+            <input
+              type="email"
+              value={userEmail}
+              onChange={(e) => setUserEmail(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Account ID:
+            </label>
+            <input
+              type="text"
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Client ID:
+            </label>
+            <input
+              type="text"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Client Secret:
+            </label>
+            <input
+              type="password"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Recording Year:
+            </label>
+            <input
+              type="number"
+              value={recordingYear}
+              onChange={(e) => setRecordingYear(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Month From:
+            </label>
+            <input
+              type="number"
+              value={monthFrom}
+              onChange={(e) => setMonthFrom(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                fontWeight: "bold",
+              }}
+            >
+              Month To:
+            </label>
+            <input
+              type="number"
+              value={monthTo}
+              onChange={(e) => setMonthTo(e.target.value)}
+              style={{
+                width: "100%",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                padding: "6px",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Buttons at the bottom */}
+        <div style={{ marginTop: "20px", textAlign: "right" }}>
+          <button onClick={handleZoomDownload} style={smallButtonStyle}>
+            Retrieve
+          </button>
+          <button onClick={onClose} style={smallButtonStyle}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface ZoomFileSelectorModalProps {
+  onClose: () => void;
+  onFilesSelected: (files: string[]) => void;
+}
+
+const ZoomFileSelectorModal: React.FC<ZoomFileSelectorModalProps> = ({
+  onClose,
+  onFilesSelected,
+}) => {
+  const [files, setFiles] = React.useState<string[]>([]);
+  const [selected, setSelected] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    // Fetch the list of downloaded Zoom files
+    fetch("/api/zoom/list-files")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.files) {
+          setFiles(data.files);
+        }
+      })
+      .catch((err) => {
+        console.error("Error listing zoom files:", err);
+      });
+  }, []);
+
+  // Toggle a file in/out of the "selected" array
+  const handleCheckboxChange = (file: string) => {
+    setSelected((prev) =>
+      prev.includes(file) ? prev.filter((f) => f !== file) : [...prev, file]
+    );
+  };
+
+  // Copy the selected files
+  const handleCopySelected = async () => {
+    if (selected.length === 0) {
+      alert("Please select at least one file to save.");
+      return;
+    }
+    const response = await fetch("/api/zoom/copy-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selectedFiles: selected }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      alert("Error copying files: " + result.error);
+    }
+    onFilesSelected(selected);
+    alert("Files copied successfully!");
+    onClose(); // close the modal
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 9999,
+      }}
+    >
+      <div
+        style={{
+          background: "white",
+          padding: "20px",
+          borderRadius: "8px",
+          width: "600px",
+        }}
+      >
+        <h2 style={{ marginBottom: "16px" }}>
+          Select Retrieved Zoom Files to Save
+        </h2>
+        {files.length === 0 ? (
+          <p>No Zoom files found.</p>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0 }}>
+            {files.map((file) => {
+              // If it ends with .vtt, append a label
+              const isTranscript = file.toLowerCase().endsWith(".vtt");
+              const displayName = isTranscript
+                ? `${file} (Audio transcript)`
+                : file;
+
+              return (
+                <li
+                  key={file}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    marginBottom: "12px",
+                    padding: "8px",
+                    borderBottom: "1px solid #ddd",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(file)}
+                    onChange={() => handleCheckboxChange(file)}
+                    style={{ marginRight: "8px" }}
+                  />
+                  <span
+                    style={{
+                      marginLeft: "6px",
+                      whiteSpace: "nowrap", // Force file name on one line
+                      overflow: "hidden",
+                      textOverflow: "ellipsis", // Optionally truncate if too long
+                    }}
+                  >
+                    {displayName}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <div style={{ marginTop: "20px", textAlign: "right" }}>
+          <button onClick={handleCopySelected} style={smallButtonStyle}>
+            Save Selected
+          </button>
+          <button onClick={onClose} style={smallButtonStyle}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface SaveModalProps {
+  show: boolean;
+  onClose: () => void;
+  // you might already have others here
+}
+
+const SaveModal: React.FC<SaveModalProps> = ({ show, onClose }) => {
   const [sessionName, setSessionName] = React.useState("");
+  const [isZoomModalVisible, setZoomModalVisible] = React.useState(false);
+  const [showZoomFileSelector, setShowZoomFileSelector] = React.useState(false);
+  const [zoomFiles, setZoomFiles] = React.useState<string[]>([]);
 
   const handleSaveClick = async () => {
     if (!sessionName.trim()) {
       alert("Please enter a session name.");
       return;
     }
-
     try {
       const response = await fetch(`/api/save-session/${sessionName}`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zoomFiles }),
       });
-
       if (response.ok) {
         console.log("Session saved successfully.");
         onClose();
@@ -2109,6 +2508,17 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
     } catch (err) {
       console.error("Error saving session:", err);
     }
+  };
+
+  const openZoomModal = () => setZoomModalVisible(true);
+  const closeZoomModal = () => setZoomModalVisible(false);
+
+  // Callback to be called by the ZoomModal when downloads are done.
+  const handleZoomDownloadComplete = () => {
+    // Hide ZoomModal
+    setZoomModalVisible(false);
+    // Show the file selector
+    setShowZoomFileSelector(true);
   };
 
   if (!show) return null;
@@ -2133,6 +2543,28 @@ const SaveModal: React.FC<ModalProps> = ({ show, onClose }) => {
             borderRadius: "4px",
           }}
         />
+        {/* New button to open the ZoomModal */}
+        <div style={{ marginTop: "16px", textAlign: "center" }}>
+          <button onClick={openZoomModal} style={smallButtonStyle}>
+            Retrieve Zoom Recordings
+          </button>
+        </div>
+        {/* Conditionally render the ZoomModal */}
+        {showZoomFileSelector && (
+          <ZoomFileSelectorModal
+            onClose={() => setShowZoomFileSelector(false)}
+            onFilesSelected={(files) => {
+              // Save the selected filenames in state
+              setZoomFiles(files);
+            }}
+          />
+        )}
+        {isZoomModalVisible && (
+          <ZoomModal
+            onClose={closeZoomModal}
+            onDownloadComplete={handleZoomDownloadComplete}
+          />
+        )}
         <button onClick={handleSaveClick} style={buttonStyle}>
           Save
         </button>
@@ -2478,6 +2910,13 @@ export const DmMap = (props: {
     }
   };
 
+  // const [isZoomModalVisible, setZoomModalVisible] = React.useState(false);
+
+  // const openZoomModal = () => setZoomModalVisible(true);
+  // const closeZoomModal = () => setZoomModalVisible(false);
+
+  const [showZoomFileSelector, setShowZoomFileSelector] = React.useState(false);
+
   const [isDownloadModalVisible, setDownloadModalVisible] =
     React.useState(false);
   const [isSaveModalVisible, setSaveModalVisible] = React.useState(false);
@@ -2809,6 +3248,11 @@ export const DmMap = (props: {
                   onClose={() => setViewModalOpen(false)}
                   sessionName={selectedSessionName}
                 />
+                {showZoomFileSelector && (
+                  <ZoomFileSelectorModal
+                    onClose={() => setShowZoomFileSelector(false)}
+                  />
+                )}
                 <Toolbar.Item isActive>
                   <Toolbar.Button onClick={openSaveModal}>
                     <Icon.Save boxSize="20px" />
