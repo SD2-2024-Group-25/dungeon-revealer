@@ -208,7 +208,7 @@ async function downloadZoomRecording(
   downloadDir = "../pubilc/research/downloads/zoom"
 ) {
   const gmtDateTime = formatGmtDateTime(meetingStartTime);
-  const filename = `${gmtDateTime}_${recordingName.replace(/\W+/g, "_")}`;
+  const filename = `session-on-${gmtDateTime}`;
 
   let filePath;
   if (fileType === "MP4") {

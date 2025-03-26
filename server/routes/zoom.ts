@@ -49,4 +49,98 @@ router.post("/download", async (req, res) => {
   }
 });
 
+// 1) GET /api/zoom/list-files
+router.get("/list-files", async (req, res) => {
+  try {
+    const zoomDir = path.join(
+      __dirname,
+      "..",
+      "..",
+      "public",
+      "research",
+      "downloads",
+      "zoom"
+    );
+
+    // If the folder doesn't exist yet, return an empty list
+    if (!fs.existsSync(zoomDir)) {
+      return res.json({ files: [] });
+    }
+
+    // Filter out directories, only list actual files
+    const allItems = fs.readdirSync(zoomDir);
+    const files = allItems.filter((item) => {
+      const itemPath = path.join(zoomDir, item);
+      return fs.statSync(itemPath).isFile();
+    });
+
+    res.json({ files });
+  } catch (err: any) {
+    console.error("Error listing zoom files:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2) POST /api/zoom/copy-files
+router.post("/copy-files", async (req, res) => {
+  try {
+    const { selectedFiles } = req.body;
+    if (!selectedFiles || !Array.isArray(selectedFiles)) {
+      return res.status(400).json({ error: "No selected files provided" });
+    }
+
+    // Source directory: where Zoom downloads are stored
+    const zoomDir = path.join(
+      __dirname,
+      "..",
+      "..",
+      "public",
+      "research",
+      "downloads",
+      "zoom"
+    );
+
+    // Destination folder(s). You mentioned copying them to "public/research/zoom"
+    // and also "public/research/saved". Adjust as needed:
+    const finalZoomDir = path.join(
+      __dirname,
+      "..",
+      "..",
+      "public",
+      "research",
+      "zoom"
+    );
+    const finalSavedDir = path.join(
+      __dirname,
+      "..",
+      "..",
+      "public",
+      "research",
+      "saved"
+    );
+
+    // Ensure directories exist
+    fs.ensureDirSync(finalZoomDir);
+    fs.ensureDirSync(finalSavedDir);
+
+    // Copy each selected file
+    for (const fileName of selectedFiles) {
+      const srcPath = path.join(zoomDir, fileName);
+
+      // Copy to finalZoomDir
+      const destZoom = path.join(finalZoomDir, fileName);
+      fs.copyFileSync(srcPath, destZoom);
+
+      // Also copy to finalSavedDir
+      const destSaved = path.join(finalSavedDir, fileName);
+      fs.copyFileSync(srcPath, destSaved);
+    }
+
+    res.json({ success: true, message: "Selected files copied successfully." });
+  } catch (err: any) {
+    console.error("Error copying zoom files:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
