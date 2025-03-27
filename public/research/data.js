@@ -9,8 +9,10 @@ const researchSettingsPath = path.join(researchPath, "settings.json"); // settin
 const downloadsFolder = path.join(researchPath, "downloads");
 const savedFolder = path.join(researchPath, "saved");
 const notesFolder = path.join(researchPath, "notes");
+const savedZoomFolder = path.join(researchPath, "zoom");
 const whiteboardFolder = path.join(researchPath, "whiteboard");
 const sessionFolder = path.join(downloadsFolder, "session");
+const zoomDownloadFolder = path.join(downloadsFolder, "zoom");
 
 let mapSettingsWatcher = null;
 let isWatchingMapSettings = false;
@@ -39,9 +41,11 @@ async function ensureFoldersExist() {
     await mkdir(savedFolder, { recursive: true });
     await mkdir(notesFolder, { recursive: true });
     await mkdir(whiteboardFolder, { recursive: true });
+    await mkdir(savedZoomFolder, { recursive: true });
 
     // Ensure the session folder exists
     await mkdir(sessionFolder, { recursive: true });
+    await mkdir(zoomDownloadFolder, { recursive: true });
   } catch (err) {
     console.error(`Error ensuring folders exist: ${err.message}`);
   }
