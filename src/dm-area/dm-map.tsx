@@ -97,7 +97,7 @@ import { IsDungeonMasterContext } from "../is-dungeon-master-context";
 import { LazyLoadedMapView } from "../lazy-loaded-map-view";
 import { typeFromAST } from "graphql";
 import { position } from "polished";
-import ClearIcon from "@mui/icons-material/Clear";
+import { getOptimalDimensions } from "../util";
 
 type ToolMapRecord = {
   name: string;
@@ -767,16 +767,23 @@ interface ViewModalProps {
   show: boolean;
   onClose: () => void;
   sessionName: string;
-  //mapName: string;
   onSessionSelect: (session: string) => void;
+  map: {
+    grid?: {
+      offsetX?: number;
+      offsetY?: number;
+      columnWidth: number;
+      columnHeight: number;
+    };
+  };
 }
 
 const ViewModal: React.FC<ViewModalProps> = ({
   show,
   onClose,
   sessionName,
-  //mapName,
   onSessionSelect,
+  map,
 }) => {
   const [sessions, setSessions] = React.useState<string[]>([]);
   const [iterations, setIterations] = React.useState<string[]>([]);
@@ -891,11 +898,16 @@ const ViewModal: React.FC<ViewModalProps> = ({
               imgHeight = dimensions.height;
             }
 
+            /*
             if (imgWidth > 800 || imgHeight > 600) {
               const scale = Math.min(800 / imgWidth, 600 / imgHeight);
               imgWidth = Math.floor(imgWidth * scale);
               imgHeight = Math.floor(imgHeight * scale);
-            }
+            }*/
+
+            const optimal = getOptimalDimensions(imgWidth, imgHeight, 800, 600);
+            imgWidth = Math.floor(optimal.width);
+            imgHeight = Math.floor(optimal.height);
 
             setCanvasSize({ width: imgWidth, height: imgHeight });
 
@@ -982,15 +994,53 @@ const ViewModal: React.FC<ViewModalProps> = ({
               }
             } else if (!playerView) {
               if (fogprogressIMG) {
-                ctx.fillStyle = "gray";
+                //opaque fog progress layer for DM view
+                ctx.save();
+                ctx.globalAlpha = 0.5;
                 ctx.drawImage(fogprogressIMG, 0, 0, imgWidth, imgHeight);
+                ctx.restore();
+
                 console.log("Fog progress layer drawn");
               }
             }
 
             if (showGrid) {
               //drawing a grid overlay using the original coordinates
-              const gridSpacing = 50;
+              const ratio = optimal.ratio;
+
+              const scaledOffsetX = (map.grid?.offsetX ?? 0) * ratio;
+              const scaledOffsetY = (map.grid?.offsetY ?? 0) * ratio;
+              const colW = (map.grid?.columnWidth ?? 50) * ratio;
+              const colH = (map.grid?.columnHeight ?? 50) * ratio;
+
+              ctx.strokeStyle = "rgb(0, 0, 0)";
+              ctx.lineWidth = 1;
+
+              //for(let x = scaledOffsetX; x <= scaledOffsetX + mapImage.naturalWidth; x += colW){
+              for (
+                let x = scaledOffsetX;
+                x <= scaledOffsetX + canvas.width;
+                x += colW
+              ) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, mapImage.naturalHeight);
+                ctx.stroke();
+              }
+
+              //for(let y = scaledOffsetY; y <= scaledOffsetY + mapImage.naturalWidth; y += colH){
+              for (
+                let y = scaledOffsetY;
+                y <= scaledOffsetY + canvas.height;
+                y += colH
+              ) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(mapImage.naturalWidth, y);
+                ctx.stroke();
+              }
+
+              /*const gridSpacing = 50;
               ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
               ctx.lineWidth = 1;
               for (let x = 0; x <= mapImage.naturalWidth; x += gridSpacing) {
@@ -1004,7 +1054,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
                 ctx.moveTo(0, y);
                 ctx.lineTo(mapImage.naturalWidth, y);
                 ctx.stroke();
-              }
+              }*/
             }
 
             if (settings.tokens && Array.isArray(settings.tokens)) {
@@ -1045,7 +1095,13 @@ const ViewModal: React.FC<ViewModalProps> = ({
                     const tokenImage = new Image();
                     //circle for token is created
                     ctx.beginPath();
-                    ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
+                    ctx.arc(
+                      token.x,
+                      token.y,
+                      token.radius * optimal.ratio,
+                      0,
+                      Math.PI * 2
+                    );
                     ctx.fillStyle = token.color;
                     ctx.fill();
                     ctx.closePath();
@@ -1053,7 +1109,13 @@ const ViewModal: React.FC<ViewModalProps> = ({
                   //if the token doesnt contain an image draw circle only
                   else {
                     ctx.beginPath();
-                    ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
+                    ctx.arc(
+                      token.x,
+                      token.y,
+                      token.radius * optimal.ratio,
+                      0,
+                      Math.PI * 2
+                    );
                     ctx.fillStyle = token.color;
                     ctx.fill();
                     ctx.closePath();
@@ -1105,17 +1167,33 @@ const ViewModal: React.FC<ViewModalProps> = ({
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             style={{
               position: "absolute",
+              //top: "50%",
               left: isSidebarOpen ? "225px" : "10px",
+              //transform: "translateY(-50%)",
               cursor: "pointer",
               overflow: "hidden",
               transition: "width 0.3s ease",
               zIndex: 9999,
             }}
           >
-            {isSidebarOpen ? "Close" : "Open"}
+            {/*
+            <span
+              style={{
+                display: "inline-block",
+                width: 0,
+                height: 0,
+                borderTop: "8px solid transparent",
+                borderBottom: "8px solid transparent",
+                borderLeft: "8px solid gray",
+                transform: isSidebarOpen ? "rotate(180deg)" : "none",
+                transition: "transform 0.2s ease",
+              }}
+             />
+         */}
+
+            {isSidebarOpen ? "<" : ">"}
           </button>
 
-          {/*  <div style={{ display: "flex", height: "calc(100% - 40px)" }}> */}
           {/* Left Sidebar */}
           {isSidebarOpen && (
             <div
@@ -1176,7 +1254,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              border: "1px solid #ccc",
+              //border: "1px solid #ccc",
             }}
           >
             {sessionName ? (
@@ -1195,7 +1273,9 @@ const ViewModal: React.FC<ViewModalProps> = ({
                       style={{
                         position: "relative",
                         width: `${canvasSize.width}.px`,
-                        overflow: "auto",
+                        //overflow: "auto",
+                        overflowX: "auto",
+                        overflowY: "auto",
                         border: "1px solid #ccc",
                       }}
                     >
@@ -1234,13 +1314,23 @@ const ViewModal: React.FC<ViewModalProps> = ({
             >
               <div style={{ display: "flex" }}>
                 <button
-                  style={playerView ? activeSegmentStyle : inactiveSegmentStyle}
+                  style={{
+                    ...(playerView ? activeSegmentStyle : inactiveSegmentStyle),
+                    flexGrow: "1 1 0%",
+                    minWidth: "80px",
+                    maxHeight: "40px",
+                  }}
                   onClick={() => setPlayerView(true)}
                 >
                   Player View
                 </button>
                 <button
-                  style={playerView ? inactiveSegmentStyle : activeSegmentStyle}
+                  style={{
+                    ...(playerView ? inactiveSegmentStyle : activeSegmentStyle),
+                    flexGrow: "1 1 0%",
+                    minWidth: "80px",
+                    maxHeight: "40px",
+                  }}
                   onClick={() => setPlayerView(false)}
                 >
                   DM View
@@ -1268,7 +1358,14 @@ const ViewModal: React.FC<ViewModalProps> = ({
           </div>
 
           <div>
-            <button onClick={onClose} style={viewCloseButtonStyle}>
+            <button
+              style={viewCloseButtonStyle}
+              onClick={() => {
+                onClose();
+                setPlayerView(true);
+                setShowGrid(false);
+              }}
+            >
               <span style={{ marginRight: "5px", fontSize: "30px" }}>
                 &times;
               </span>
@@ -1380,8 +1477,8 @@ const viewModalStyle: React.CSSProperties = {
   padding: "20px",
   borderRadius: "8px",
   textAlign: "center",
-  width: "80vw",
-  height: "80vh",
+  width: "95vw",
+  height: "90vh",
   zIndex: 1000000000,
 };
 
@@ -1842,6 +1939,15 @@ export const DmMap = (props: {
                   show={isViewModalOpen}
                   onClose={() => setViewModalOpen(false)}
                   sessionName={selectedSessionName}
+                  onSessionSelect={() => {}}
+                  map={{
+                    grid: {
+                      offsetX: map.grid?.offsetX ?? 0,
+                      offsetY: map.grid?.offsetY ?? 0,
+                      columnWidth: map.grid?.columnWidth ?? 50,
+                      columnHeight: map.grid?.columnHeight ?? 50,
+                    },
+                  }}
                 />
                 <Toolbar.Item isActive>
                   <Toolbar.Button onClick={openSaveModal}>
