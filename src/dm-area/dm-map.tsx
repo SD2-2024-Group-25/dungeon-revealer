@@ -803,6 +803,24 @@ const ViewModal: React.FC<ViewModalProps> = ({
   }>({ width: 800, height: 600 });
   const [playerView, setPlayerView] = React.useState<boolean>(true);
 
+  const goToPreviousIteration = () => {
+    if (selectedIteration) {
+      const index = iterations.indexOf(selectedIteration);
+      if (index > 0) {
+        setSelectedIteration(iterations[index - 1]);
+      }
+    }
+  };
+
+  const goToNextIteration = () => {
+    if (selectedIteration) {
+      const index = iterations.indexOf(selectedIteration);
+      if (index < iterations.length - 1) {
+        setSelectedIteration(iterations[index + 1]);
+      }
+    }
+  };
+
   // Fetch sessions if modal is shown and no session is selected
   React.useEffect(() => {
     if (show && !sessionName) {
@@ -1298,6 +1316,20 @@ const ViewModal: React.FC<ViewModalProps> = ({
             )}
 
             {/* the right panel and left sidebar div */}
+
+            {selectedIteration && (
+              <div
+                style={{
+                  marginTop: "1rem",
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: "1rem",
+                }}
+              >
+                <button onClick={goToPreviousIteration}>{"<"}</button>
+                <button onClick={goToNextIteration}>{">"}</button>
+              </div>
+            )}
 
             {/* The grid toggle on the right side */}
             <div
