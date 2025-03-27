@@ -1111,7 +1111,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
               zIndex: 9999,
             }}
           >
-            {isSidebarOpen ? "Close" : "Open"}
+            {isSidebarOpen ? "<" : ">"}
           </button>
 
           {/*  <div style={{ display: "flex", height: "calc(100% - 40px)" }}> */}
