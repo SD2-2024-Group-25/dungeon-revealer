@@ -982,6 +982,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
               }
             } else if (!playerView) {
               if (fogprogressIMG) {
+                ctx.fillStyle = "gray";
                 ctx.drawImage(fogprogressIMG, 0, 0, imgWidth, imgHeight);
                 console.log("Fog progress layer drawn");
               }
@@ -1008,7 +1009,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
 
             if (settings.tokens && Array.isArray(settings.tokens)) {
               settings.tokens.forEach((token: any) => {
-                if (!playerView || token.isVisibleToPlayers) {
+                if (!playerView || token.isVisibleForPlayers) {
                   //if the token contains an image
                   if (token.tokenImageId) {
                     //if token with image has a label
