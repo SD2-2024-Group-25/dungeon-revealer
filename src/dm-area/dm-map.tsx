@@ -1290,7 +1290,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
                     <div
                       style={{
                         position: "relative",
-                        width: `${canvasSize.width}.px`,
+                        width: `${canvasSize.width}px`,
                         //overflow: "auto",
                         overflowX: "auto",
                         overflowY: "auto",
@@ -1302,7 +1302,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
                         ref={canvasRef}
                         style={{
                           border: "1px solid #ccc",
-                          width: `${canvasSize.width}.px`,
+                          width: `${canvasSize.width}px`,
                         }}
                       />
                     </div>
