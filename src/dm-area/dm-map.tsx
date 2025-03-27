@@ -1326,8 +1326,16 @@ const ViewModal: React.FC<ViewModalProps> = ({
                   gap: "1rem",
                 }}
               >
-                <button onClick={goToPreviousIteration}>{"<"}</button>
-                <button onClick={goToNextIteration}>{">"}</button>
+                <button onClick={goToPreviousIteration}>
+                  <span style={{ marginRight: "5px", fontSize: "30px" }}>
+                    &#8249;
+                  </span>
+                </button>
+                <button onClick={goToNextIteration}>
+                  <span style={{ marginRight: "5px", fontSize: "30px" }}>
+                    &#8250;
+                  </span>
+                </button>
               </div>
             )}
 
