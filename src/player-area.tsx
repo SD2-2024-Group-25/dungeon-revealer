@@ -399,7 +399,7 @@ const PlayerMap = ({
       setMapOffset({ left: rect.left, top: rect.top });
     }
   }, [currentMap.data?.activeMap]);
-
+  const noteWindowActions = useNoteWindowActions();
   return (
     <>
       <div style={{ cursor: "grab", background: "black", height: "100vh" }}>
@@ -554,7 +554,21 @@ const PlayerMap = ({
                           }}
                         >
                           <Icon.BookOpen boxSize="20px" />
-                          <Icon.Label>Notes</Icon.Label>
+                          <Icon.Label>Player Notes</Icon.Label>
+                        </Toolbar.LongPressButton>
+                      </Toolbar.Item>
+                      <Toolbar.Item isActive>
+                        <Toolbar.LongPressButton
+                          onClick={() => {
+                            noteWindowActions.showNoteInWindow(
+                              null,
+                              "note-editor",
+                              true
+                            );
+                          }}
+                        >
+                          <Icon.BookOpen boxSize="20px" />
+                          <Icon.Label>DM Notes</Icon.Label>
                         </Toolbar.LongPressButton>
                       </Toolbar.Item>
                       <Toolbar.Item isActive>

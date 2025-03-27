@@ -293,13 +293,14 @@ export const Chat: React.FC<{
         <Stack height="100%">
           <ChatMessages chat={data} />
           <ChatTextArea />
-          <Button.Tertiary
+          {/* <Button.Tertiary
             small
             onClick={toggleShowDiceRollNotes}
             style={{ marginTop: 8 }}
           >
             <Icon.Dice boxSize="16px" /> <span> Dice Roll Notes</span>
-          </Button.Tertiary>
+          </Button.Tertiary> 
+          Maybe add whiteboard button here for everyone?*/}
         </Stack>
       ) : mode === "user" ? (
         <div style={{ marginTop: 16 }}>

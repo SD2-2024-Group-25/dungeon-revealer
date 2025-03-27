@@ -1167,6 +1167,98 @@ const ViewModal: React.FC<ViewModalProps> = ({
   );
 };
 
+interface ClearModalProps {
+  show: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+const ClearModal: React.FC<ClearModalProps> = ({
+  show,
+  onClose,
+  onConfirm,
+}) => {
+  const [input, setInput] = React.useState("");
+
+  const requiredPhrase = "CLEAR SESSION";
+  const isConfirmed = input.trim().toUpperCase() === requiredPhrase;
+
+  if (!show) return null;
+
+  const modalBackdropStyle: React.CSSProperties = {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100vw",
+    height: "100vh",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  };
+
+  const modalStyle: React.CSSProperties = {
+    backgroundColor: "white",
+    padding: "30px",
+    borderRadius: "10px",
+    maxWidth: "400px",
+    width: "90%",
+    textAlign: "center",
+  };
+
+  const buttonStyle: React.CSSProperties = {
+    margin: "0 10px",
+    padding: "10px 15px",
+    borderRadius: "6px",
+    border: "none",
+    cursor: "pointer",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    marginTop: "20px",
+    padding: "10px",
+    width: "100%",
+    borderRadius: "4px",
+    border: "1px solid #ccc",
+    textAlign: "center",
+  };
+
+  const handleConfirm = async () => {
+    await onConfirm(); // Triggers the API call in the parent
+    setInput(""); // reset the input after it finishes
+  };
+
+  return (
+    <div style={modalBackdropStyle}>
+      <div style={modalStyle}>
+        <p>
+          Type <strong>{requiredPhrase}</strong> to confirm:
+        </p>
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          style={inputStyle}
+          placeholder="Enter confirmation phrase"
+        />
+        <div style={{ marginTop: "20px" }}>
+          <button
+            style={{ ...buttonStyle, opacity: isConfirmed ? 1 : 0.5 }}
+            onClick={handleConfirm}
+            disabled={!isConfirmed}
+          >
+            Yes, clear it
+          </button>
+          <button style={buttonStyle} onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface MovementGraphModalProps {
   show: boolean;
   onClose: () => void;
@@ -2758,6 +2850,19 @@ const viewCloseButtonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
+const modalBackdropStyle: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  width: "100vw",
+  height: "100vh",
+  backgroundColor: "rgba(0, 0, 0, 0.5)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 1000,
+};
+
 export const DmMap = (props: {
   map: dmMap_DMMapFragment$key;
   password: string;
@@ -2908,6 +3013,38 @@ export const DmMap = (props: {
     } catch (err) {
       console.error("Error making API request:", err);
     }
+  };
+
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+
+  const handleClearClick = () => {
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+  };
+
+  const confirmClearSession = async () => {
+    try {
+      const response = await fetch("/api/clear-session", {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        console.log("Session cleared!");
+      } else {
+        console.error("Failed to clear session");
+      }
+    } catch (err) {
+      console.error("Error making API request:", err);
+    } finally {
+      setIsModalOpen(false);
+    }
+  };
+
+  const cancelClearSession = () => {
+    setIsModalOpen(false);
   };
 
   // const [isZoomModalVisible, setZoomModalVisible] = React.useState(false);
@@ -3261,7 +3398,7 @@ export const DmMap = (props: {
                 </Toolbar.Item>
                 {/* SaveModal Component */}
                 <SaveModal show={isSaveModalVisible} onClose={closeSaveModal} />
-                <Toolbar.Item isActive>
+                {/* <Toolbar.Item isActive>
                   <Toolbar.Button
                     onClick={() => {
                       props.openMediaLibrary();
@@ -3270,7 +3407,7 @@ export const DmMap = (props: {
                     <Icon.Image boxSize="20px" />
                     <Icon.Label>Media Library</Icon.Label>
                   </Toolbar.Button>
-                </Toolbar.Item>
+                </Toolbar.Item> */}
                 <Toolbar.Item isActive>
                   <Toolbar.Button onClick={openExcalidraw}>
                     <Icon.Drawing boxSize="20px" />
@@ -3336,14 +3473,14 @@ export const DmMap = (props: {
                     <Icon.Label color="hsl(211, 27%, 70%)">Not Live</Icon.Label>
                   </Toolbar.Item>
                 )}
-                {asyncClipBoardApi ? (
+                {/* {asyncClipBoardApi ? (
                   <Toolbar.Item isActive>
                     <Toolbar.Button onClick={copyMapToClipboard}>
                       <Icon.Clipboard boxSize="20px" />
                       <Icon.Label>Clipboard</Icon.Label>
                     </Toolbar.Button>
                   </Toolbar.Item>
-                ) : null}
+                ) : null} */}
                 <Toolbar.Item isActive>
                   <Toolbar.Button
                     onClick={() => {
@@ -3366,6 +3503,18 @@ export const DmMap = (props: {
                     </Icon.Label>
                   </Toolbar.Button>
                 </Toolbar.Item>
+                <Toolbar.Item isActive>
+                  <Toolbar.Button onClick={handleClearClick}>
+                    <Icon.Trash boxSize="20px" />
+                    <Icon.Label>Clear session</Icon.Label>
+                  </Toolbar.Button>
+                </Toolbar.Item>
+
+                <ClearModal
+                  show={isModalOpen}
+                  onClose={cancelClearSession}
+                  onConfirm={confirmClearSession}
+                />
               </Toolbar.Group>
             </Toolbar>
           </BottomToolbarContainer>

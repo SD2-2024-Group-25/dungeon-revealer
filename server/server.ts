@@ -299,6 +299,27 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   );
 
+  app.post("/api/clear-session", (req, res) => {
+    const sourceSessionFolder = path.join(researchPath, "downloads", "session");
+    const sourceZoomFolder = path.join(researchPath, "downloads", "zoom");
+    const sourceNotesFolder = path.join(researchPath, "notes");
+    const sourceWhiteboardFolder = path.join(researchPath, "whiteboard");
+    const selectedZoomFolder = path.join(researchPath, "zoom");
+
+    try {
+      deleteFolderContents(sourceSessionFolder);
+      deleteFolderContents(sourceNotesFolder);
+      deleteFolderContents(sourceWhiteboardFolder);
+      deleteFolderContents(selectedZoomFolder);
+      deleteFolderContents(sourceZoomFolder);
+
+      res.status(200).json({ message: "Session cleared" });
+    } catch (error) {
+      console.error("Error clearing session:", error);
+      res.status(500).json({ error: "Failed to clear session" });
+    }
+  });
+
   app.post("/api/recording", (req, res) => {
     const filePath = path.join(researchPath, "settings.json");
 
