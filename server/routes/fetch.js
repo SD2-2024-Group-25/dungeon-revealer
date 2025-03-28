@@ -129,7 +129,11 @@ router.get("/whiteboardIterations", async (req, res) => {
 
     const images = await fs.readdir(whiteboardFolder);
 
-    return res.status(200).json({ images });
+    const filteredImages = images.filter((file) =>
+      file.toLowerCase().endsWith(".png")
+    );
+
+    return res.status(200).json({ images: filteredImages });
   } catch (error) {
     console.error("Error fetching whiteboard:", error);
     return res.status(500).json({ error: "Failed to fetch whiteboard." });
