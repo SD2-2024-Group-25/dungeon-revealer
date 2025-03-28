@@ -74,34 +74,58 @@ router.get("/iterationMap", async (req, res) => {
   // Gets the map from an session (grabs image from the first iteration folder)
   const { sessionName } = req.query;
   if (!sessionName) {
+    console.error("Missing sessionName in query:", req.query);
     return res.status(400).json({ error: "Missing sessionName" });
   }
 
   try {
     const basePath = path.resolve("./");
-    const session = path.join(
+    const sessionPath = path.join(
       basePath,
       "public",
       "research",
       "saved",
       sessionName
     );
-    if (!(await fs.pathExists(session))) {
+    if (!(await fs.pathExists(sessionPath))) {
+      console.error("Session not found at:", sessionPath);
       return res.status(404).json({ error: "Session not found" });
     }
-    const firstIteration = await getFirstIteration(session);
+
+    const firstIteration = await getFirstIteration(sessionPath);
     if (!firstIteration) {
+      console.error("No iterations found in session at:", sessionPath);
       return res.status(404).json({ error: "No iterations found" });
     }
 
-    const iterationPath = path.join(session, firstIteration);
+    const iterationFolderPath = path.join(sessionPath, firstIteration);
 
-    const map = maphelp.getExistingMapImage(iterationPath);
-    if (!map) {
+    // Read the settings.json file to get mapPath
+    const settingsPath = path.join(iterationFolderPath, "settings.json");
+    let mapFileName = "map.png";
+
+    if (await fs.pathExists(settingsPath)) {
+      try {
+        const settings = await fs.readJson(settingsPath);
+        if (settings && settings.mapPath) {
+          mapFileName = settings.mapPath;
+        }
+        console.log("Found settings, using mapPath:", mapFileName);
+      } catch (err) {
+        console.error("Error reading settings.json:", err);
+      }
+    } else {
+      console.warn("settings.json not found at:", settingsPath);
+    }
+
+    const iterationMapPath = path.join(iterationFolderPath, mapFileName);
+    if (!(await fs.pathExists(iterationMapPath))) {
+      console.error("Map image not found at:", iterationMapPath);
       return res.status(404).json({ error: "Map image not found." });
     }
 
-    const imageUrl = `/research/saved/${sessionName}/${firstIteration}/${map}`;
+    const imageUrl = `/api/iteration/${sessionName}/${firstIteration}/${mapFileName}`;
+    console.log("Returning map image URL:", imageUrl);
     return res.status(200).json({ url: imageUrl });
   } catch (error) {
     console.error("Error fetching map:", error);

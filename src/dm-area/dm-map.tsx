@@ -1245,6 +1245,7 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
           }
 
           const json = await response.json();
+          console.log("Fetched image URL:", json.url);
           setBackgroundImage(json.url);
         } catch (error) {
           console.error("Error fetching background image:", error);
