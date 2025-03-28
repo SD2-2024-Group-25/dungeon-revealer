@@ -100,6 +100,7 @@ import { typeFromAST } from "graphql";
 import { position } from "polished";
 import { useSocket } from "../socket";
 import * as d3 from "d3";
+import { getOptimalDimensions } from "../util";
 
 type ToolMapRecord = {
   name: string;
@@ -770,19 +771,31 @@ const DownloadModal: React.FC<ModalProps> = ({
 };
 
 interface ViewModalProps {
-  show: boolean;
+  /*show: boolean;
   onClose: () => void;
   sessionName: string;
   //mapName: string;
+  onSessionSelect: (session: string) => void; */
+  show: boolean;
+  onClose: () => void;
+  sessionName: string;
   onSessionSelect: (session: string) => void;
+  map: {
+    grid?: {
+      offsetX?: number;
+      offsetY?: number;
+      columnWidth: number;
+      columnHeight: number;
+    };
+  };
 }
 
 const ViewModal: React.FC<ViewModalProps> = ({
   show,
   onClose,
   sessionName,
-  //mapName,
   onSessionSelect,
+  map,
 }) => {
   const [sessions, setSessions] = React.useState<string[]>([]);
   const [iterations, setIterations] = React.useState<string[]>([]);
@@ -798,6 +811,30 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const [showHerdModal, setShowHerdModal] = React.useState(false);
   const [showWhiteboardModal, setShowWhiteboardModal] = React.useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const [showGrid, setShowGrid] = React.useState<boolean>(false);
+  const [canvasSize, setCanvasSize] = React.useState<{
+    width: number;
+    height: number;
+  }>({ width: 800, height: 600 });
+  const [playerView, setPlayerView] = React.useState<boolean>(true);
+
+  const goToPreviousIteration = () => {
+    if (selectedIteration) {
+      const index = iterations.indexOf(selectedIteration);
+      if (index > 0) {
+        setSelectedIteration(iterations[index - 1]);
+      }
+    }
+  };
+
+  const goToNextIteration = () => {
+    if (selectedIteration) {
+      const index = iterations.indexOf(selectedIteration);
+      if (index < iterations.length - 1) {
+        setSelectedIteration(iterations[index + 1]);
+      }
+    }
+  };
 
   // Fetch sessions if modal is shown and no session is selected
   React.useEffect(() => {
@@ -874,14 +911,269 @@ const ViewModal: React.FC<ViewModalProps> = ({
           const settings = await settingsResponse.json();
           console.log("Fetched settings:", settings);
 
-          const dynamicMapName = settings.mapPath || "map.jpg";
-          const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}/${dynamicMapName}`;
+          //const dynamicMapName = settings.mapPath || "map.jpg";
+          //const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}/${dynamicMapName}`;
+          const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}`;
           console.log("Loading map image from:", mapImageUrl);
 
           const mapImage = new Image();
           mapImage.src = mapImageUrl;
 
-          mapImage.onload = () => {
+          mapImage.onload = async () => {
+            //just added and made map.ImageOnload async
+            let imgWidth = mapImage.naturalWidth;
+            let imgHeight = mapImage.naturalHeight;
+
+            if (
+              mapImage.src.toLowerCase().endsWith(".svg") &&
+              (!imgWidth || !imgHeight)
+            ) {
+              const dimensions = await getSvgDimensions(mapImage.src);
+              imgWidth = dimensions.width;
+              imgHeight = dimensions.height;
+            }
+
+            /*
+            if (imgWidth > 800 || imgHeight > 600) {
+              const scale = Math.min(800 / imgWidth, 600 / imgHeight);
+              imgWidth = Math.floor(imgWidth * scale);
+              imgHeight = Math.floor(imgHeight * scale);
+            }*/
+
+            const optimal = getOptimalDimensions(imgWidth, imgHeight, 800, 600);
+            imgWidth = Math.floor(optimal.width);
+            imgHeight = Math.floor(optimal.height);
+
+            setCanvasSize({ width: imgWidth, height: imgHeight });
+
+            const canvas = canvasRef.current;
+            if (!canvas) {
+              return;
+            }
+            canvas.width = imgWidth;
+            canvas.height = imgHeight;
+
+            //creating the canvas so the map can be drawn on
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              console.error("Unable to get 2D context from canvas.");
+              return;
+            }
+            //clears the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (
+              mapImage.src.toLowerCase().endsWith(".svg") &&
+              (!imgWidth || !imgHeight)
+            ) {
+              const dimensions = await getSvgDimensions(mapImage.src);
+              imgWidth = dimensions.width;
+              imgHeight = dimensions.height;
+            }
+
+            const scale = Math.min(
+              canvas.width / imgWidth,
+              canvas.height / imgHeight
+            );
+
+            const drawWidth = imgWidth * scale;
+            const drawHeight = imgHeight * scale;
+
+            //calculate offsets to center the image in the canvas
+            const offsetX = (canvas.width - drawWidth) / 2;
+            const offsetY = (canvas.height - drawHeight) / 2;
+
+            //save the current context state
+            ctx.save();
+            //translate and scale the canvas so that drawing operations use the iamges original coordinate system
+            ctx.translate(offsetX, offsetY);
+            ctx.scale(scale, scale);
+
+            //drawing the base map image at its original dimensions
+            ctx.drawImage(mapImage, 0, 0, imgWidth, imgHeight);
+            console.log("Map image drawn to canvas with transformation.");
+
+            //Load and draw fog layers
+            const loadImage = (url: string): Promise<HTMLImageElement> =>
+              new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = () =>
+                  reject(new Error(`Filed to load image at ${url}`));
+                img.src = url;
+              });
+
+            //construct fog image urls
+            const fogLiveUrl = `${mapImageUrl}/fog.live.png`;
+            const fogProgressUrl = `${mapImageUrl}/fog.progress.png`;
+            let fogLiveImg: HTMLImageElement | null = null;
+            let fogprogressIMG: HTMLImageElement | null = null;
+            try {
+              fogLiveImg = await loadImage(fogLiveUrl);
+              console.log("Fog live layer loaded.");
+            } catch (e) {
+              console.warn("Fog live image not found:", e);
+            }
+            try {
+              fogprogressIMG = await loadImage(fogProgressUrl);
+              console.log("Fog progress layer loaded.");
+            } catch (e) {
+              console.warn("Fog progress image not found:", e);
+            }
+
+            if (playerView) {
+              //Draw fog layers
+              if (fogLiveImg) {
+                ctx.drawImage(fogLiveImg, 0, 0, imgWidth, imgHeight);
+                console.log("Fog live layer drawn");
+              }
+            } else if (!playerView) {
+              if (fogprogressIMG) {
+                //opaque fog progress layer for DM view
+                ctx.save();
+                ctx.globalAlpha = 0.5;
+                ctx.drawImage(fogprogressIMG, 0, 0, imgWidth, imgHeight);
+                ctx.restore();
+
+                console.log("Fog progress layer drawn");
+              }
+            }
+
+            if (showGrid) {
+              //drawing a grid overlay using the original coordinates
+              const ratio = optimal.ratio;
+
+              const scaledOffsetX = (map.grid?.offsetX ?? 0) * ratio;
+              const scaledOffsetY = (map.grid?.offsetY ?? 0) * ratio;
+              const colW = (map.grid?.columnWidth ?? 50) * ratio;
+              const colH = (map.grid?.columnHeight ?? 50) * ratio;
+
+              ctx.strokeStyle = "rgb(0, 0, 0)";
+              ctx.lineWidth = 1;
+
+              //for(let x = scaledOffsetX; x <= scaledOffsetX + mapImage.naturalWidth; x += colW){
+              for (
+                let x = scaledOffsetX;
+                x <= scaledOffsetX + canvas.width;
+                x += colW
+              ) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, mapImage.naturalHeight);
+                ctx.stroke();
+              }
+
+              //for(let y = scaledOffsetY; y <= scaledOffsetY + mapImage.naturalWidth; y += colH){
+              for (
+                let y = scaledOffsetY;
+                y <= scaledOffsetY + canvas.height;
+                y += colH
+              ) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(mapImage.naturalWidth, y);
+                ctx.stroke();
+              }
+
+              /*const gridSpacing = 50;
+              ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
+              ctx.lineWidth = 1;
+              for (let x = 0; x <= mapImage.naturalWidth; x += gridSpacing) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, mapImage.naturalHeight);
+                ctx.stroke();
+              }
+              for (let y = 0; y <= mapImage.naturalHeight; y += gridSpacing) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(mapImage.naturalWidth, y);
+                ctx.stroke();
+              }*/
+            }
+
+            if (settings.tokens && Array.isArray(settings.tokens)) {
+              settings.tokens.forEach((token: any) => {
+                if (!playerView || token.isVisibleForPlayers) {
+                  //if the token contains an image
+                  if (token.tokenImageId) {
+                    //if token with image has a label
+                    if (token.label) {
+                      const nonscaledFontSize = 14;
+                      ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
+                      ctx.textAlign = "center";
+                      ctx.textBaseline = "bottom";
+
+                      const textMetrics = ctx.measureText(token.label);
+                      const textWidth = textMetrics.width;
+                      const textHeight = nonscaledFontSize / scale;
+
+                      ctx.fillStyle = "white";
+                      ctx.fillRect(
+                        token.x - textWidth / 2 - (textWidth * 0.05) / 2,
+                        token.y + (token.radius - textHeight * 0.1),
+                        textWidth + textWidth * 0.05,
+                        textHeight + textHeight * 0.05
+                      );
+
+                      ctx.fillStyle = "#000";
+                      ctx.textAlign = "center";
+                      ctx.fillText(
+                        token.label,
+                        token.x,
+                        token.y +
+                          token.radius +
+                          (token.radius / 2 - textHeight * 0.05)
+                      );
+                    }
+
+                    const tokenImage = new Image();
+                    //circle for token is created
+                    ctx.beginPath();
+                    ctx.arc(
+                      token.x,
+                      token.y,
+                      token.radius * optimal.ratio,
+                      0,
+                      Math.PI * 2
+                    );
+                    ctx.fillStyle = token.color;
+                    ctx.fill();
+                    ctx.closePath();
+                  }
+                  //if the token doesnt contain an image draw circle only
+                  else {
+                    ctx.beginPath();
+                    ctx.arc(
+                      token.x,
+                      token.y,
+                      token.radius * optimal.ratio,
+                      0,
+                      Math.PI * 2
+                    );
+                    ctx.fillStyle = token.color;
+                    ctx.fill();
+                    ctx.closePath();
+
+                    if (token.label) {
+                      const nonscaledFontSize = 14;
+                      ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
+                      ctx.fillStyle = "#000";
+                      ctx.textAlign = "center";
+                      ctx.textBaseline = "middle";
+                      ctx.fillText(token.label, token.x, token.y);
+                    }
+                  }
+                }
+              });
+              console.log("Tokens drawn on canvas.");
+            } else {
+              console.log("No tokens found in settings.");
+            }
+            ctx.restore();
+          };
+
+          /*  mapImage.onload = () => {
             const canvas = canvasRef.current;
 
             if (!canvas) {
@@ -1014,6 +1306,8 @@ const ViewModal: React.FC<ViewModalProps> = ({
             ctx.restore();
           };
 
+          */
+
           mapImage.onerror = (error) => {
             console.error("Error loading map image:", error);
           };
@@ -1023,7 +1317,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
       };
       drawMapWithTokens();
     }
-  }, [show, selectedIteration, sessionName]);
+  }, [show, selectedIteration, sessionName, showGrid, playerView]);
 
   if (!show) return null;
 
@@ -1156,7 +1450,27 @@ const ViewModal: React.FC<ViewModalProps> = ({
                 {selectedIteration ? (
                   <>
                     <h3>{selectedIteration}</h3>
-                    <canvas
+
+                    <div
+                      style={{
+                        position: "relative",
+                        width: `${canvasSize.width}px`,
+                        overflowX: "auto",
+                        overflowY: "auto",
+                        border: "1px solid #ccc",
+                      }}
+                    >
+                      {/* Scrollable container for map */}
+                      <canvas
+                        ref={canvasRef}
+                        style={{
+                          border: "1px solid #ccc",
+                          width: `${canvasSize.width}px`,
+                        }}
+                      />
+                    </div>
+
+                    {/*  <canvas
                       ref={canvasRef}
                       width={800}
                       height={600}
@@ -1166,6 +1480,8 @@ const ViewModal: React.FC<ViewModalProps> = ({
                         objectFit: "contain",
                       }}
                     />
+
+                    */}
                   </>
                 ) : (
                   <p>Please select an iteration</p>
@@ -1173,6 +1489,28 @@ const ViewModal: React.FC<ViewModalProps> = ({
               </>
             ) : (
               <p>Please select a session</p>
+            )}
+
+            {selectedIteration && (
+              <div
+                style={{
+                  marginTop: "1rem",
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: "1rem",
+                }}
+              >
+                <button onClick={goToPreviousIteration}>
+                  <span style={{ marginRight: "5px", fontSize: "30px" }}>
+                    &#8249;
+                  </span>
+                </button>
+                <button onClick={goToNextIteration}>
+                  <span style={{ marginRight: "5px", fontSize: "30px" }}>
+                    &#8250;
+                  </span>
+                </button>
+              </div>
             )}
           </div>
         </div>
