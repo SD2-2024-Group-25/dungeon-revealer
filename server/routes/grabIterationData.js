@@ -7,8 +7,9 @@ async function getIterationFolders(sessionPath) {
   try {
     const folders = await fs.readdir(sessionPath);
     const filteredFolders = folders.filter(
-      // no notes or whiteboard
-      (folder) => !["notes", "whiteboard"].includes(folder.toLowerCase())
+      // no notes or whiteboard or zoom_data
+      (folder) =>
+        !["notes", "whiteboard", "zoom_data"].includes(folder.toLowerCase())
     );
     const iterationFolders = await Promise.all(
       filteredFolders.map(async (folder) => {
