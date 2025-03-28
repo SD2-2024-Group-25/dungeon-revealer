@@ -109,6 +109,40 @@ type ToolMapRecord = {
   MenuComponent: null | (() => React.ReactElement);
 };
 
+async function getSvgDimensions(svgUrl: string) {
+  try {
+    const response = await fetch(svgUrl);
+    const svgText = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, "image/svg+xml");
+    const svgEl = doc.querySelector("svg");
+    if (!svgEl) {
+      console.warn("No <svg> element found, using fallback dimensions.");
+      return { width: 800, height: 600 }; //Fallback values
+    }
+    let width = svgEl.getAttribute("width");
+    let height = svgEl.getAttribute("height");
+
+    //if missing, try to derive dimensions from the viewBox
+    const viewBox = svgEl.getAttribute("viewBox");
+    if ((!width || !height) && viewBox) {
+      const parts = viewBox.split(" ").map(Number);
+      if (parts.length === 4) {
+        width = parts[2].toString();
+        height = parts[3].toString();
+      }
+    }
+
+    return {
+      width: Number(width) || 800,
+      height: Number(height) || 600,
+    };
+  } catch (e) {
+    console.error("Error fetching SVG dimensions:", e);
+    return { width: 800, height: 600 };
+  }
+}
+
 const BrushSettings = (): React.ReactElement => {
   const { state, setState } = React.useContext(BrushToolContext);
 
@@ -1491,6 +1525,85 @@ const ViewModal: React.FC<ViewModalProps> = ({
               <p>Please select a session</p>
             )}
 
+            <div
+              style={{
+                marginTop: "1rem",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
+              <div style={{ display: "flex" }}>
+                <button
+                  style={{
+                    ...(playerView ? activeSegmentStyle : inactiveSegmentStyle),
+                    flexGrow: "1",
+                    minWidth: "100px",
+                    maxHeight: "40px",
+                    borderLeft: "2px solid #ccc",
+                    borderTop: "2px solid #ccc",
+                    borderBottom: "2px solid #ccc",
+                    borderTopLeftRadius: "10px",
+                    borderBottomLeftRadius: "10px",
+                  }}
+                  onClick={() => setPlayerView(true)}
+                >
+                  Player View
+                </button>
+                <button
+                  style={{
+                    ...(playerView ? inactiveSegmentStyle : activeSegmentStyle),
+                    flexGrow: "1",
+                    minWidth: "100px",
+                    maxHeight: "40px",
+                    borderRight: "2px solid #ccc",
+                    borderTop: "2px solid #ccc",
+                    borderBottom: "2px solid #ccc",
+                    borderTopRightRadius: "10px",
+                    borderBottomRightRadius: "10px",
+                  }}
+                  onClick={() => setPlayerView(false)}
+                >
+                  DM View
+                </button>
+              </div>
+              <div style={{ display: "flex" }}>
+                <button
+                  style={{
+                    ...(showGrid ? inactiveSegmentStyle : activeSegmentStyle),
+                    flexGrow: "1",
+                    minWidth: "100px",
+                    maxHeight: "40px",
+                    borderLeft: "2px solid #ccc",
+                    borderTop: "2px solid #ccc",
+                    borderBottom: "2px solid #ccc",
+                    borderTopLeftRadius: "10px",
+                    borderBottomLeftRadius: "10px",
+                  }}
+                  onClick={() => setShowGrid(false)}
+                >
+                  Grid Off
+                </button>
+                <button
+                  style={{
+                    ...(showGrid ? activeSegmentStyle : inactiveSegmentStyle),
+                    flexGrow: "1",
+                    minWidth: "100px",
+                    maxHeight: "40px",
+                    borderRight: "2px solid #ccc",
+                    borderTop: "2px solid #ccc",
+                    borderBottom: "2px solid #ccc",
+                    borderTopRightRadius: "10px",
+                    borderBottomRightRadius: "10px",
+                  }}
+                  onClick={() => setShowGrid(true)}
+                >
+                  Grid On
+                </button>
+              </div>
+            </div>
+
             {selectedIteration && (
               <div
                 style={{
@@ -1518,6 +1631,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
           Close
         </button>
       </div>
+
       {showMovementModal && (
         <MovementGraphModal
           show={showMovementModal}
@@ -1541,6 +1655,24 @@ const ViewModal: React.FC<ViewModalProps> = ({
       )}
     </div>
   );
+};
+
+const activeSegmentStyle: React.CSSProperties = {
+  backgroundColor: "#666",
+  color: "#fff",
+  padding: "0.5rem 0.5rem",
+  width: "100px",
+  //border: 'none',
+  cursor: "pointer",
+};
+
+const inactiveSegmentStyle: React.CSSProperties = {
+  backgroundColor: "#fff",
+  color: "#000",
+  padding: "0.5rem 0.5rem",
+  width: "100px",
+  //border: 'none',
+  cursor: "pointer",
 };
 
 interface ClearModalProps {
@@ -3735,6 +3867,15 @@ export const DmMap = (props: {
                   show={isViewModalOpen}
                   onClose={() => setViewModalOpen(false)}
                   sessionName={selectedSessionName}
+                  onSessionSelect={() => {}}
+                  map={{
+                    grid: {
+                      offsetX: map.grid?.offsetX ?? 0,
+                      offsetY: map.grid?.offsetY ?? 0,
+                      columnWidth: map.grid?.columnWidth ?? 50,
+                      columnHeight: map.grid?.columnHeight ?? 50,
+                    },
+                  }}
                 />
                 {showZoomFileSelector && (
                   <ZoomFileSelectorModal
