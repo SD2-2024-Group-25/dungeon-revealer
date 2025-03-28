@@ -1360,14 +1360,36 @@ const ViewModal: React.FC<ViewModalProps> = ({
       <div style={viewModalStyle}>
         {/* Button that opens the movement graph */}
         <button
+          style={{
+            position: "absolute",
+            left: "97%",
+            top: "10px",
+            cursor: "pointer",
+            //padding: "5px",
+          }}
+          onClick={() => {
+            onClose();
+            setPlayerView(true);
+            setShowGrid(false);
+          }}
+        >
+          <span style={{ marginRight: "5px", fontSize: "30px" }}>&times;</span>
+        </button>
+        <button
           onClick={() => setShowMovementModal(true)}
           style={{
             position: "absolute",
             left: "85%",
-            top: "10px",
+            top: "50px",
             cursor: "pointer",
             border: "2px solid #ccc",
             padding: "5px",
+            /* position: "absolute",
+            left: "85%",
+            top: "10px",
+            cursor: "pointer",
+            border: "2px solid #ccc",
+            padding: "5px",*/
           }}
         >
           Open Movement Graph
@@ -1379,10 +1401,17 @@ const ViewModal: React.FC<ViewModalProps> = ({
           style={{
             position: "absolute",
             left: "85%",
-            top: "50px",
+            top: "90px",
             cursor: "pointer",
             border: "2px solid #ccc",
             padding: "5px",
+            /*
+            position: "absolute",
+            left: "85%",
+            top: "50px",
+            cursor: "pointer",
+            border: "2px solid #ccc",
+            padding: "5px",*/
           }}
         >
           Open Herd Graph
@@ -1394,7 +1423,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
           style={{
             position: "absolute",
             left: "85%",
-            top: "90px",
+            top: "130px",
             cursor: "pointer",
             border: "2px solid #ccc",
             padding: "5px",
@@ -1414,7 +1443,16 @@ const ViewModal: React.FC<ViewModalProps> = ({
             transition: "width 0.3s ease",
           }}
         >
-          {isSidebarOpen ? "Close" : "Open"}
+          {isSidebarOpen ? (
+            <span style={{ marginRight: "5px", fontSize: "30px" }}>
+              &#8249;
+            </span>
+          ) : (
+            <span style={{ marginRight: "5px", fontSize: "30px" }}>
+              &#8250;
+            </span>
+          )}
+          {/*isSidebarOpen ? "Close" : "Open"*/}
         </button>
 
         <div style={{ display: "flex", height: "calc(100% - 40px)" }}>
@@ -1627,9 +1665,11 @@ const ViewModal: React.FC<ViewModalProps> = ({
             )}
           </div>
         </div>
+        {/*
         <button onClick={onClose} style={viewCloseButtonStyle}>
           Close
         </button>
+        */}
       </div>
 
       {showMovementModal && (
@@ -2678,6 +2718,7 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
             )}
           </div>
         </div>
+
         <button onClick={onClose} style={whiteboardCloseButtonStyle}>
           Close
         </button>
