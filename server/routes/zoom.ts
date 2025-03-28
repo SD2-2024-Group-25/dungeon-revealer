@@ -86,7 +86,7 @@ router.get("/list-files", async (req, res) => {
 // 2) POST /api/zoom/copy-files
 router.post("/copy-files", async (req, res) => {
   try {
-    const { selectedFiles } = req.body;
+    const { selectedFiles, session } = req.body;
     if (!selectedFiles || !Array.isArray(selectedFiles)) {
       return res.status(400).json({ error: "No selected files provided" });
     }
@@ -110,7 +110,9 @@ router.post("/copy-files", async (req, res) => {
       "..",
       "public",
       "research",
-      "zoom"
+      "saved",
+      session,
+      "zoom_data"
     );
     // const finalSavedDir = path.join(
     //   __dirname,
@@ -124,8 +126,6 @@ router.post("/copy-files", async (req, res) => {
     // Ensure directories exist
     fs.ensureDirSync(finalZoomDir);
     // fs.ensureDirSync(finalSavedDir);
-    deleteFolderContents(finalZoomDir);
-
     // Copy each selected file
     for (const fileName of selectedFiles) {
       const srcPath = path.join(zoomDir, fileName);

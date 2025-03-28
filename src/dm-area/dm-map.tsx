@@ -625,6 +625,20 @@ const DownloadModal: React.FC<ModalProps> = ({
   const [sessions, setSessions] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [isZoomModalVisible, setZoomModalVisible] = React.useState(false);
+  const [showZoomFileSelector, setShowZoomFileSelector] = React.useState(false);
+  const [zoomSession, setSelectedSession] = React.useState<string>();
+  const [zoomFiles, setZoomFiles] = React.useState<string[]>([]);
+
+  const openZoomModal = (session: string) => {
+    setSelectedSession(session);
+    setZoomModalVisible(true);
+  };
+  const closeZoomModal = () => setZoomModalVisible(false);
+  const handleZoomDownloadComplete = () => {
+    setZoomModalVisible(false);
+    setShowZoomFileSelector(true);
+  };
 
   React.useEffect(() => {
     if (show) {
@@ -699,6 +713,23 @@ const DownloadModal: React.FC<ModalProps> = ({
           <p>No sessions available to view or download</p>
         ) : (
           <>
+            {/* Conditionally render the ZoomModal */}
+            {showZoomFileSelector && (
+              <ZoomFileSelectorModal
+                onClose={() => setShowZoomFileSelector(false)}
+                onFilesSelected={(files) => {
+                  // Save the selected filenames in state
+                  setZoomFiles(files);
+                }}
+                session={zoomSession as string}
+              />
+            )}
+            {isZoomModalVisible && (
+              <ZoomModal
+                onClose={closeZoomModal}
+                onDownloadComplete={handleZoomDownloadComplete}
+              />
+            )}
             <p>Select a session to download:</p>
             <div style={listContainerStyle}>
               <ul style={{ padding: 0, listStyle: "none" }}>
@@ -710,6 +741,13 @@ const DownloadModal: React.FC<ModalProps> = ({
                       onClick={() => handleViewClick(session)}
                     >
                       View
+                    </button>
+                    {/* New button to open the ZoomModal */}
+                    <button
+                      onClick={() => openZoomModal(session)}
+                      style={smallButtonStyle}
+                    >
+                      Zoom
                     </button>
                     <button
                       style={smallButtonStyle}
@@ -2436,14 +2474,17 @@ const ZoomModal: React.FC<ZoomModalProps> = ({
 interface ZoomFileSelectorModalProps {
   onClose: () => void;
   onFilesSelected: (files: string[]) => void;
+  session: string;
 }
 
 const ZoomFileSelectorModal: React.FC<ZoomFileSelectorModalProps> = ({
   onClose,
   onFilesSelected,
+  session,
 }) => {
   const [files, setFiles] = React.useState<string[]>([]);
   const [selected, setSelected] = React.useState<string[]>([]);
+  console.log(session);
 
   React.useEffect(() => {
     // Fetch the list of downloaded Zoom files
@@ -2475,7 +2516,7 @@ const ZoomFileSelectorModal: React.FC<ZoomFileSelectorModalProps> = ({
     const response = await fetch("/api/zoom/copy-files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ selectedFiles: selected }),
+      body: JSON.stringify({ selectedFiles: selected, session }),
     });
     const result = await response.json();
     if (!response.ok) {
@@ -2576,8 +2617,6 @@ interface SaveModalProps {
 
 const SaveModal: React.FC<SaveModalProps> = ({ show, onClose }) => {
   const [sessionName, setSessionName] = React.useState("");
-  const [isZoomModalVisible, setZoomModalVisible] = React.useState(false);
-  const [showZoomFileSelector, setShowZoomFileSelector] = React.useState(false);
   const [zoomFiles, setZoomFiles] = React.useState<string[]>([]);
 
   const handleSaveClick = async () => {
@@ -2602,17 +2641,6 @@ const SaveModal: React.FC<SaveModalProps> = ({ show, onClose }) => {
     }
   };
 
-  const openZoomModal = () => setZoomModalVisible(true);
-  const closeZoomModal = () => setZoomModalVisible(false);
-
-  // Callback to be called by the ZoomModal when downloads are done.
-  const handleZoomDownloadComplete = () => {
-    // Hide ZoomModal
-    setZoomModalVisible(false);
-    // Show the file selector
-    setShowZoomFileSelector(true);
-  };
-
   if (!show) return null;
 
   return (
@@ -2635,28 +2663,6 @@ const SaveModal: React.FC<SaveModalProps> = ({ show, onClose }) => {
             borderRadius: "4px",
           }}
         />
-        {/* New button to open the ZoomModal */}
-        <div style={{ marginTop: "16px", textAlign: "center" }}>
-          <button onClick={openZoomModal} style={smallButtonStyle}>
-            Retrieve Zoom Recordings
-          </button>
-        </div>
-        {/* Conditionally render the ZoomModal */}
-        {showZoomFileSelector && (
-          <ZoomFileSelectorModal
-            onClose={() => setShowZoomFileSelector(false)}
-            onFilesSelected={(files) => {
-              // Save the selected filenames in state
-              setZoomFiles(files);
-            }}
-          />
-        )}
-        {isZoomModalVisible && (
-          <ZoomModal
-            onClose={closeZoomModal}
-            onDownloadComplete={handleZoomDownloadComplete}
-          />
-        )}
         <button onClick={handleSaveClick} style={buttonStyle}>
           Save
         </button>
@@ -2801,12 +2807,15 @@ const modalStyle: React.CSSProperties = {
   background: "white",
   padding: "20px",
   borderRadius: "8px",
-  textAlign: "center",
-  width: "500px",
+  width: "80%", // Set the width to 80% of the viewport width
+  maxWidth: "800px", // Maximum width to avoid going beyond the screen
+  overflowY: "auto", // Allow scrolling if content is too long
+  wordWrap: "break-word", // Allow long words to break and wrap to the next line
+  whiteSpace: "normal", // Ensure text does not overflow on a single line
 };
 
 const listContainerStyle: React.CSSProperties = {
-  maxHeight: "200px", // Set a max height for the list container
+  maxHeight: "400px", // Set a max height for the list container
   overflowY: "auto", // Enable scrolling within the list container
   marginBottom: "10px",
 };
@@ -2822,8 +2831,12 @@ const buttonStyle: React.CSSProperties = {
 const sessionItemStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
-  padding: "8px 0",
+  justifyContent: "space-between", // Space between item text and buttons
+  marginBottom: "12px",
+  padding: "8px",
+  borderBottom: "1px solid #ddd",
+  wordWrap: "break-word", // Allow text to wrap
+  whiteSpace: "normal", // Allow text to wrap to the next line
 };
 
 const smallButtonStyle: React.CSSProperties = {
