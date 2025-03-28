@@ -262,14 +262,14 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
   apiRouter.get(
     "/iteration/:sessionName/:iterationName/:map",
     async (req, res) => {
-      const { sessionName, iterationName } = req.params;
+      const { sessionName, iterationName, map } = req.params;
 
       const mapFilePath = path.join(
         researchPath,
         "saved",
         sessionName,
         iterationName,
-        "map.png"
+        map
       );
 
       if (!fs.existsSync(mapFilePath)) {
