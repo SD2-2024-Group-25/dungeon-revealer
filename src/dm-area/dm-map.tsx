@@ -3018,6 +3018,10 @@ export const DmMap = (props: {
       if (response.ok) {
         const data = await response.json();
 
+        if (data.recording === "recording") {
+          socket.emit("update-recording-status", { isRecording: true });
+        }
+
         // Update the local state based on the response
         setIsRecording(data.recording === "recording");
       } else {
@@ -3110,7 +3114,6 @@ export const DmMap = (props: {
       password: "SUPER_SECRET_DM_PASSWORD",
       desiredRole: "dm",
     });
-
     // Optionally listen for "authenticated"
     socket.on("authenticated", () => {
       console.log(

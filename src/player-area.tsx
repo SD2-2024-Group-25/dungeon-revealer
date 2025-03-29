@@ -182,6 +182,23 @@ const PlayerMap = ({
     null
   );
 
+  React.useEffect(() => {
+    const handleRecordingStarted = ({
+      isRecording,
+    }: {
+      isRecording: boolean;
+    }) => {
+      console.log("DM started recording", isRecording);
+      alert("You are being recorded");
+    };
+
+    socket.on("update-recording-status", handleRecordingStarted);
+
+    return () => {
+      socket.off("update-recording-status", handleRecordingStarted);
+    };
+  }, []);
+
   const handleMeasureClick = async (x: number, y: number) => {
     if (!isMeasuring) return; // Only process clicks if measuring mode is active
 
