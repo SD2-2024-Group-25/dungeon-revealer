@@ -3510,9 +3510,13 @@ export const DmMap = (props: {
                 </Toolbar.Item>
                 <Toolbar.Item isActive>
                   <Toolbar.Button onClick={handleClick}>
-                    <Icon.Camera boxSize="20px" />
+                    {isRecording ? (
+                      <Icon.CameraRecord boxSize="20px" />
+                    ) : (
+                      <Icon.Camera boxSize="20px" />
+                    )}
                     <Icon.Label>
-                      {isRecording ? "Stop" : "Start"} Recording
+                      {isRecording ? "" : "Start"} Recording
                     </Icon.Label>
                   </Toolbar.Button>
                 </Toolbar.Item>
