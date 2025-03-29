@@ -188,12 +188,12 @@ const PlayerMap = ({
     }: {
       isRecording: boolean;
     }) => {
-      console.log("DM started recording", isRecording);
-      alert("You are being recorded");
+      if (isRecording) {
+        alert("You are being recorded");
+      }
     };
 
     socket.on("update-recording-status", handleRecordingStarted);
-
     return () => {
       socket.off("update-recording-status", handleRecordingStarted);
     };
