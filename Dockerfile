@@ -1,41 +1,42 @@
-FROM node:16 as dependency-builder
+# Dockerfile
+FROM node:18
 
-WORKDIR /usr/src/build
+# 1. Set work directory
+WORKDIR /usr/src/dungeon-revealer
 
-RUN echo "unsafe-perm = true" > .npmrc
+# 2. Copy package files first (for caching layers)
+COPY package.json package-lock.json ./
 
+
+# 3. Ensure devDependencies are installed (so patch-package is available)
+ENV NODE_ENV=development
+RUN npm ci
+
+# 4. Copy the rest 
 COPY . .
 
-RUN npm install
+# --- Optional debug: list what's in patches/ to confirm it’s there
+RUN echo "===== Checking patches folder =====" \
+ && ls -l patches || echo "No patches folder found"
 
+# 5. Explicitly run patch-package to ensure patches are applied
+#    was not working without this
+RUN npm run patch-package
 
-FROM dependency-builder as application-builder
+# 6. Switch to production mode for final build
+ENV NODE_ENV=production
 
-ARG SKIP_BUILD
+# Pass the build arg (defaults to some URL if not provided)
+ARG VITE_EXCALIDRAW_URL
 
-RUN if [ "$SKIP_BUILD" = "true" ]; then echo "SKIP BUILD"; else npm run build; fi
+# Make it available as an ENV variable during the build
 
-FROM dependency-builder as production-dependency-builder
+ENV VITE_EXCALIDRAW_URL=$VITE_EXCALIDRAW_URL
+# 7. Build the app
+RUN npm run build
 
-# then we remove all dependencies we no longer need
-RUN npm prune --production
-
-
-FROM node:16-slim as final
-
-# Create app directory
-WORKDIR /usr/src/app
-
-# Copy app source
-COPY --from=application-builder /usr/src/build/build /usr/src/app/build
-COPY --from=application-builder /usr/src/build/server-build /usr/src/app/server-build
-COPY --from=production-dependency-builder /usr/src/build/node_modules /usr/src/app/node_modules
-COPY --from=production-dependency-builder  /usr/src/build/package.json /usr/src/app/package.json
-COPY --from=production-dependency-builder  /usr/src/build/package-lock.json /usr/src/app/package-lock.json
-
-ARG NODE_ENV="production"
-ENV NODE_ENV="production"
-
+# 8. Expose and run
 EXPOSE 3000
 
-CMD [ "node", "server-build/index.js" ]
+CMD ["sh", "-c", "node server-build/index.js & node public/research/data.js"]
+
