@@ -491,7 +491,9 @@ const PlayerMap = ({
               boxShadow: "0px 2px 5px rgba(0,0,0,0.2)", // Optional styling for visibility
             }}
           >
-            {measuredDistance.toFixed(2)} units
+            {gridData && gridData.columnWidth && gridData.columnHeight
+              ? `${measuredDistance.toFixed(2)} squares`
+              : `${measuredDistance.toFixed(2)} pixels`}
           </div>
         )}
       </div>
