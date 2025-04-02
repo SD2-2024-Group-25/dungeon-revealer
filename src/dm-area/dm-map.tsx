@@ -1411,8 +1411,8 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
       return;
 
     // Graph dimensions
-    const svgWidth = 800;
-    const svgHeight = 800;
+    const svgWidth = 750;
+    const svgHeight = 750;
     const margin = { top: 40, right: 40, bottom: 40, left: 40 };
     const width = svgWidth - margin.left - margin.right;
     const height = svgHeight - margin.top - margin.bottom;
@@ -1542,7 +1542,12 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
         >
           <h2>Movement Graph for {sessionName}</h2>
           <div>
-            <button onClick={onClose}>Close</button>
+            <button
+              onClick={onClose}
+              style={{ top: "10%", position: "relative", display: "flex" }}
+            >
+              Close
+            </button>
             <div
               style={{
                 position: "absolute",
@@ -1587,7 +1592,7 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
             </div>
           </div>
         </div>
-        <div ref={svgRef} style={{ width: "800px", height: "800px" }} />{" "}
+        <div ref={svgRef} style={{ width: "750px", height: "750px" }} />{" "}
         {/* Graph */}
       </div>
     </div>
@@ -1740,8 +1745,8 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
       return;
 
     // Graph dimensions
-    const svgWidth = 800;
-    const svgHeight = 800;
+    const svgWidth = 750;
+    const svgHeight = 750;
     const margin = { top: 40, right: 40, bottom: 40, left: 40 };
     const width = svgWidth - margin.left - margin.right;
     const height = svgHeight - margin.top - margin.bottom;
@@ -2032,7 +2037,12 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
             }}
           >
             <h2>Herd Graph for {sessionName}</h2>
-            <button onClick={onClose}>Close</button>
+            <button
+              onClick={onClose}
+              style={{ top: "10%", display: "flex", position: "relative" }}
+            >
+              Close
+            </button>
           </div>
           <div
             style={{
@@ -2086,7 +2096,7 @@ const HerdGraphModal: React.FC<MovementGraphModalProps> = ({
                   Next
                 </button>
               </div>
-              <div ref={svgRef} style={{ width: "800px", height: "800px" }} />{" "}
+              <div ref={svgRef} style={{ width: "750px", height: "750px" }} />{" "}
               {/* Graph */}
             </div>
             {rightSidebar()}
@@ -2740,7 +2750,7 @@ const herdModalStyle: React.CSSProperties = {
   borderRadius: "8px",
   textAlign: "center",
   width: "1225px",
-  height: "850px",
+  height: "800px",
   zIndex: 1000000001,
 };
 
@@ -2763,8 +2773,8 @@ const movementModalStyle: React.CSSProperties = {
   padding: "20px",
   borderRadius: "8px",
   textAlign: "center",
-  width: "850px",
-  height: "850px",
+  width: "800px",
+  height: "800px",
   zIndex: 1000000001,
 };
 
