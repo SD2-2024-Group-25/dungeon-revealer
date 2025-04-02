@@ -822,6 +822,7 @@ interface ViewModalProps {
       columnHeight: number;
     };
   };
+  onOpenDownload: () => void;
 }
 
 const ViewModal: React.FC<ViewModalProps> = ({
@@ -830,6 +831,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
   sessionName,
   onSessionSelect,
   map,
+  onOpenDownload,
 }) => {
   const [sessions, setSessions] = React.useState<string[]>([]);
   const [iterations, setIterations] = React.useState<string[]>([]);
@@ -851,6 +853,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
     height: number;
   }>({ width: 800, height: 600 });
   const [playerView, setPlayerView] = React.useState<boolean>(true);
+  const [showDownloadModal, setShowDownloadModal] = React.useState(false);
 
   const goToPreviousIteration = () => {
     if (selectedIteration) {
@@ -906,7 +909,14 @@ const ViewModal: React.FC<ViewModalProps> = ({
           const data = await response.json();
 
           const filteredIterations = data.iterations.filter(
-            (iteration: string) => iteration.toLowerCase() !== "notes"
+            (iteration: string) => {
+              const lower = iteration.toLowerCase();
+              return (
+                lower !== "notes" &&
+                lower !== "whiteboard" &&
+                lower !== "zoom_data"
+              );
+            }
           );
           setIterations(filteredIterations);
 
@@ -954,7 +964,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
           mapImage.src = mapImageUrl;
 
           mapImage.onload = async () => {
-            //just added and made map.ImageOnload async
             let imgWidth = mapImage.naturalWidth;
             let imgHeight = mapImage.naturalHeight;
 
@@ -974,6 +983,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
               imgHeight = Math.floor(imgHeight * scale);
             }*/
 
+            //Optimal dimensions for the grid
             const optimal = getOptimalDimensions(imgWidth, imgHeight, 800, 600);
             imgWidth = Math.floor(optimal.width);
             imgHeight = Math.floor(optimal.height);
@@ -1021,7 +1031,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
             ctx.save();
             //translate and scale the canvas so that drawing operations use the iamges original coordinate system
             ctx.translate(offsetX, offsetY);
-            ctx.scale(scale, scale);
+            //ctx.scale(scale, scale);
 
             //drawing the base map image at its original dimensions
             ctx.drawImage(mapImage, 0, 0, imgWidth, imgHeight);
@@ -1072,6 +1082,8 @@ const ViewModal: React.FC<ViewModalProps> = ({
                 console.log("Fog progress layer drawn");
               }
             }
+
+            //just for the grid!!!
 
             if (showGrid) {
               //drawing a grid overlay using the original coordinates
@@ -1165,8 +1177,8 @@ const ViewModal: React.FC<ViewModalProps> = ({
                     //circle for token is created
                     ctx.beginPath();
                     ctx.arc(
-                      token.x,
-                      token.y,
+                      token.x * optimal.ratio,
+                      token.y * optimal.ratio,
                       token.radius * optimal.ratio,
                       0,
                       Math.PI * 2
@@ -1179,8 +1191,8 @@ const ViewModal: React.FC<ViewModalProps> = ({
                   else {
                     ctx.beginPath();
                     ctx.arc(
-                      token.x,
-                      token.y,
+                      token.x * optimal.ratio,
+                      token.y * optimal.ratio,
                       token.radius * optimal.ratio,
                       0,
                       Math.PI * 2
@@ -1195,7 +1207,11 @@ const ViewModal: React.FC<ViewModalProps> = ({
                       ctx.fillStyle = "#000";
                       ctx.textAlign = "center";
                       ctx.textBaseline = "middle";
-                      ctx.fillText(token.label, token.x, token.y);
+                      ctx.fillText(
+                        token.label,
+                        token.x * optimal.ratio,
+                        token.y * optimal.ratio
+                      );
                     }
                   }
                 }
@@ -1206,142 +1222,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
             }
             ctx.restore();
           };
-
-          /*  mapImage.onload = () => {
-            const canvas = canvasRef.current;
-
-            if (!canvas) {
-              console.error("Canvas element is not available.");
-              return;
-            }
-            //creating the canvas so the map can be drawn on
-            const ctx = canvas.getContext("2d");
-
-            if (!ctx) {
-              console.error("Unable to get 2D context from canvas.");
-              return;
-            }
-
-            //clears the canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const scale = Math.min(
-              canvas.width / mapImage.naturalWidth,
-              canvas.height / mapImage.naturalHeight
-            );
-
-            //calculate scale factor to maintain aspect ratio
-            const drawWidth = mapImage.naturalWidth * scale;
-            const drawHeight = mapImage.naturalHeight * scale;
-
-            //calculate offsets to center the image in the canvas
-            const offsetX = (canvas.width - drawWidth) / 2;
-            const offsetY = (canvas.height - drawHeight) / 2;
-
-            //save the current context state
-            ctx.save();
-            //translate and scale the canvas so that drawing operations use the iamges original coordinate system
-            ctx.translate(offsetX, offsetY);
-            ctx.scale(scale, scale);
-
-            //drawing the image at its original dimensions
-            ctx.drawImage(
-              mapImage,
-              0,
-              0,
-              mapImage.naturalWidth,
-              mapImage.naturalHeight
-            );
-            console.log("Map image drawn to canvas with transformation.");
-
-            //drawing a grid overlay using the original coordinates
-            const gridSpacing = 50;
-            ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
-            ctx.lineWidth = 1;
-            for (let x = 0; x <= mapImage.naturalWidth; x += gridSpacing) {
-              ctx.beginPath();
-              ctx.moveTo(x, 0);
-              ctx.lineTo(x, mapImage.naturalHeight);
-              ctx.stroke();
-            }
-            for (let y = 0; y <= mapImage.naturalHeight; y += gridSpacing) {
-              ctx.beginPath();
-              ctx.moveTo(0, y);
-              ctx.lineTo(mapImage.naturalWidth, y);
-              ctx.stroke();
-            }
-
-            if (settings.tokens && Array.isArray(settings.tokens)) {
-              settings.tokens.forEach((token: any) => {
-                //if the token contains an image
-                if (token.tokenImageId) {
-                  //if token with image has a label
-                  if (token.label) {
-                    const nonscaledFontSize = 14;
-                    ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "bottom";
-
-                    const textMetrics = ctx.measureText(token.label);
-                    const textWidth = textMetrics.width;
-                    const textHeight = nonscaledFontSize / scale;
-
-                    ctx.fillStyle = "white";
-                    ctx.fillRect(
-                      token.x - textWidth / 2 - (textWidth * 0.05) / 2,
-                      token.y + (token.radius - textHeight * 0.1),
-                      textWidth + textWidth * 0.05,
-                      textHeight + textHeight * 0.05
-                    );
-
-                    ctx.fillStyle = "#000";
-                    ctx.textAlign = "center";
-                    ctx.fillText(
-                      token.label,
-                      token.x,
-                      token.y +
-                        token.radius +
-                        (token.radius / 2 - textHeight * 0.05)
-                    );
-                  }
-
-                  const tokenImage = new Image();
-                  //tokenImage.src =
-                  //circle for token is created
-                  ctx.beginPath();
-                  ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
-                  ctx.fillStyle = token.color;
-                  ctx.fill();
-                  ctx.closePath();
-                }
-                //if the token doesnt contain an image draw circle only
-                else {
-                  ctx.beginPath();
-                  ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
-                  ctx.fillStyle = token.color;
-                  ctx.fill();
-                  ctx.closePath();
-
-                  if (token.label) {
-                    const nonscaledFontSize = 14;
-                    ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
-                    ctx.fillStyle = "#000";
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "middle";
-                    ctx.fillText(token.label, token.x, token.y);
-                  }
-                }
-              });
-              console.log("Tokens drawn on canvas.");
-            } else {
-              console.log("No tokens found in settings.");
-            }
-
-            ctx.restore();
-          };
-
-          */
-
           mapImage.onerror = (error) => {
             console.error("Error loading map image:", error);
           };
@@ -1358,7 +1238,40 @@ const ViewModal: React.FC<ViewModalProps> = ({
   return (
     <div style={viewModalOverlayStyle}>
       <div style={viewModalStyle}>
-        {/* Button that opens the movement graph */}
+        {/* Button that takes you to the previous page */}
+        <button
+          style={{
+            position: "absolute",
+            right: "97%",
+            top: "20px",
+            cursor: "pointer",
+            background: "none",
+            border: "none",
+            //padding: "5px",
+          }}
+          onClick={() => {
+            setPlayerView(true);
+            setShowGrid(false);
+            onOpenDownload();
+          }}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ display: "block" }}
+          >
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+        </button>
+
+        {/* Button that closes the view modal */}
         <button
           style={{
             position: "absolute",
@@ -1375,16 +1288,19 @@ const ViewModal: React.FC<ViewModalProps> = ({
         >
           <span style={{ marginRight: "5px", fontSize: "30px" }}>&times;</span>
         </button>
+
+        {/* Button that opens the movement graph */}
         <button
           onClick={() => setShowMovementModal(true)}
           style={{
             position: "absolute",
-            left: "85%",
+            //left: "85%",
+            right: "15px",
             top: "50px",
             cursor: "pointer",
-            border: "2px solid #ccc",
+            //border: "2px solid #ccc",
             padding: "5px",
-            /* position: "absolute",
+            /*   position: "absolute",
             left: "85%",
             top: "10px",
             cursor: "pointer",
@@ -1400,18 +1316,18 @@ const ViewModal: React.FC<ViewModalProps> = ({
           onClick={() => setShowHerdModal(true)}
           style={{
             position: "absolute",
-            left: "85%",
+            right: "15px",
             top: "90px",
             cursor: "pointer",
-            border: "2px solid #ccc",
+            //border: "2px solid #ccc",
             padding: "5px",
-            /*
-            position: "absolute",
+
+            /*  position: "absolute",
             left: "85%",
             top: "50px",
             cursor: "pointer",
             border: "2px solid #ccc",
-            padding: "5px",*/
+            padding: "5px", */
           }}
         >
           Open Herd Graph
@@ -1422,10 +1338,12 @@ const ViewModal: React.FC<ViewModalProps> = ({
           onClick={() => setShowWhiteboardModal(true)}
           style={{
             position: "absolute",
-            left: "85%",
+            //left: "85%",
+            right: "15px",
             top: "130px",
+            //top: "90px",
             cursor: "pointer",
-            border: "2px solid #ccc",
+            //border: "2px solid #ccc",
             padding: "5px",
           }}
         >
@@ -1455,7 +1373,8 @@ const ViewModal: React.FC<ViewModalProps> = ({
           {/*isSidebarOpen ? "Close" : "Open"*/}
         </button>
 
-        <div style={{ display: "flex", height: "calc(100% - 40px)" }}>
+        {/* div for left sidebar and right panel */}
+        <div style={{ display: "flex", height: "100%" }}>
           {/* Left Sidebar */}
           {isSidebarOpen && (
             <div
@@ -1506,43 +1425,61 @@ const ViewModal: React.FC<ViewModalProps> = ({
               )}
             </div>
           )}
-          {/* Right Panel */}
+
+          {/* HERE */}
           <div
             style={{
-              flex: 1,
               display: "flex",
-              flexDirection: "column",
+              flex: 1,
+              flexDirection: "row",
               alignItems: "center",
-              padding: "10px",
             }}
           >
-            {sessionName ? (
-              <>
-                <h2>{sessionName}</h2>
-                {selectedIteration ? (
-                  <>
-                    <h3>{selectedIteration}</h3>
+            {/* Main Panel */}
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                //border: "1px solid #000",
+                alignItems: "center",
+                maxHeight: "calc(90vh - 5vh)",
+                //padding: "10px",
+              }}
+            >
+              {sessionName ? (
+                <>
+                  <h2>{sessionName}</h2>
+                  {selectedIteration ? (
+                    <>
+                      <h3>{selectedIteration}</h3>
 
-                    <div
-                      style={{
-                        position: "relative",
-                        width: `${canvasSize.width}px`,
-                        overflowX: "auto",
-                        overflowY: "auto",
-                        border: "1px solid #ccc",
-                      }}
-                    >
-                      {/* Scrollable container for map */}
-                      <canvas
-                        ref={canvasRef}
+                      <div
                         style={{
-                          border: "1px solid #ccc",
+                          position: "relative",
                           width: `${canvasSize.width}px`,
+                          height: `${canvasSize.height}px`,
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          overflow: "auto",
+                          border: "1px solid #ccc",
                         }}
-                      />
-                    </div>
+                      >
+                        {/* Scrollable container for map */}
+                        <canvas
+                          ref={canvasRef}
+                          style={{
+                            border: "1px solid #ccc",
+                            width: "100%",
+                            height: "100%",
+                            overflow: "auto",
+                            objectFit: "contain",
+                          }}
+                        />
+                      </div>
 
-                    {/*  <canvas
+                      {/*  <canvas
                       ref={canvasRef}
                       width={800}
                       height={600}
@@ -1554,14 +1491,37 @@ const ViewModal: React.FC<ViewModalProps> = ({
                     />
 
                     */}
-                  </>
-                ) : (
-                  <p>Please select an iteration</p>
-                )}
-              </>
-            ) : (
-              <p>Please select a session</p>
-            )}
+                    </>
+                  ) : (
+                    <p>Please select an iteration</p>
+                  )}
+                </>
+              ) : (
+                <p>Please select a session</p>
+              )}
+
+              {selectedIteration && (
+                <div
+                  style={{
+                    //marginTop: "1rem",
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: "1rem",
+                  }}
+                >
+                  <button onClick={goToPreviousIteration}>
+                    <span style={{ marginRight: "5px", fontSize: "30px" }}>
+                      &#8249;
+                    </span>
+                  </button>
+                  <button onClick={goToNextIteration}>
+                    <span style={{ marginRight: "5px", fontSize: "30px" }}>
+                      &#8250;
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
 
             <div
               style={{
@@ -1569,7 +1529,8 @@ const ViewModal: React.FC<ViewModalProps> = ({
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                gap: "12px",
+                border: "3px solid #ccc",
+                //gap: "12px",
               }}
             >
               <div style={{ display: "flex" }}>
@@ -1577,6 +1538,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
                   style={{
                     ...(playerView ? activeSegmentStyle : inactiveSegmentStyle),
                     flexGrow: "1",
+
                     minWidth: "100px",
                     maxHeight: "40px",
                     borderLeft: "2px solid #ccc",
@@ -1642,27 +1604,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
               </div>
             </div>
 
-            {selectedIteration && (
-              <div
-                style={{
-                  marginTop: "1rem",
-                  display: "flex",
-                  justifyContent: "center",
-                  gap: "1rem",
-                }}
-              >
-                <button onClick={goToPreviousIteration}>
-                  <span style={{ marginRight: "5px", fontSize: "30px" }}>
-                    &#8249;
-                  </span>
-                </button>
-                <button onClick={goToNextIteration}>
-                  <span style={{ marginRight: "5px", fontSize: "30px" }}>
-                    &#8250;
-                  </span>
-                </button>
-              </div>
-            )}
+            {/* HERE */}
           </div>
         </div>
         {/*
@@ -1672,6 +1614,12 @@ const ViewModal: React.FC<ViewModalProps> = ({
         */}
       </div>
 
+      {showDownloadModal && (
+        <DownloadModal
+          show={showDownloadModal}
+          onClose={() => setShowDownloadModal(false)}
+        />
+      )}
       {showMovementModal && (
         <MovementGraphModal
           show={showMovementModal}
@@ -2051,15 +1999,24 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
         >
           <h2>Movement Graph for {sessionName}</h2>
           <div>
-            <button onClick={onClose}>Close</button>
+            <button
+              onClick={onClose}
+              style={{
+                position: "absolute",
+                top: 40,
+              }}
+            >
+              Close
+            </button>
             <div
               style={{
                 position: "absolute",
-                top: 60,
+                top: 70,
                 left: "50%",
                 transform: "translateX(-50%)",
                 display: "flex",
                 gap: "10px",
+                //zIndex: 2,
               }}
             >
               <button
@@ -3297,8 +3254,8 @@ const viewModalStyle: React.CSSProperties = {
   padding: "20px",
   borderRadius: "8px",
   textAlign: "center",
-  width: "80vw",
-  height: "80vh",
+  width: "95vw",
+  height: "90vh",
   zIndex: 1000000000,
 };
 
@@ -3580,6 +3537,7 @@ export const DmMap = (props: {
 
   const [isDownloadModalVisible, setDownloadModalVisible] =
     React.useState(false);
+
   const [isSaveModalVisible, setSaveModalVisible] = React.useState(false);
 
   const openDownloadModal = async () => {
@@ -3600,6 +3558,11 @@ export const DmMap = (props: {
 
   const [isViewModalOpen, setViewModalOpen] = React.useState(false);
   const [selectedSessionName, setSelectedSessionName] = React.useState("");
+
+  const openDownloadAndCloseView = () => {
+    setViewModalOpen(false);
+    setDownloadModalVisible(true);
+  };
 
   const handleViewClick = (sessionName: string) => {
     console.log(
@@ -3917,6 +3880,7 @@ export const DmMap = (props: {
                       columnHeight: map.grid?.columnHeight ?? 50,
                     },
                   }}
+                  onOpenDownload={openDownloadAndCloseView}
                 />
                 {showZoomFileSelector && (
                   <ZoomFileSelectorModal
