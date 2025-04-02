@@ -3018,6 +3018,10 @@ export const DmMap = (props: {
       if (response.ok) {
         const data = await response.json();
 
+        if (data.recording === "recording") {
+          socket.emit("update-recording-status", { isRecording: true });
+        }
+
         // Update the local state based on the response
         setIsRecording(data.recording === "recording");
       } else {
@@ -3110,7 +3114,6 @@ export const DmMap = (props: {
       password: "SUPER_SECRET_DM_PASSWORD",
       desiredRole: "dm",
     });
-
     // Optionally listen for "authenticated"
     socket.on("authenticated", () => {
       console.log(
@@ -3510,9 +3513,13 @@ export const DmMap = (props: {
                 </Toolbar.Item>
                 <Toolbar.Item isActive>
                   <Toolbar.Button onClick={handleClick}>
-                    <Icon.Camera boxSize="20px" />
+                    {isRecording ? (
+                      <Icon.CameraRecord boxSize="20px" />
+                    ) : (
+                      <Icon.Camera boxSize="20px" />
+                    )}
                     <Icon.Label>
-                      {isRecording ? "Stop" : "Start"} Recording
+                      {isRecording ? "" : "Start"} Recording
                     </Icon.Label>
                   </Toolbar.Button>
                 </Toolbar.Item>

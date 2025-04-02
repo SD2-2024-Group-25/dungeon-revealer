@@ -338,7 +338,6 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       const updatedState =
         jsonData.recording === "recording" ? "stopped" : "recording";
       jsonData.recording = updatedState;
-      console.log("Updated recording state:", updatedState);
 
       fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), (err) => {
         if (err) {
@@ -811,6 +810,11 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     socketSessionStore.set(socket, {
       id: socket.id,
       role: "unauthenticated",
+    });
+
+    socket.on("update-recording-status", (data) => {
+      // Broadcast to everyone *except* the sender (DM)
+      socket.broadcast.emit("update-recording-status", data);
     });
 
     socket.on("authenticate", ({ password, desiredRole }) => {

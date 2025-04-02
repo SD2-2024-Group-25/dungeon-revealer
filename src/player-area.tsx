@@ -182,6 +182,23 @@ const PlayerMap = ({
     null
   );
 
+  React.useEffect(() => {
+    const handleRecordingStarted = ({
+      isRecording,
+    }: {
+      isRecording: boolean;
+    }) => {
+      if (isRecording) {
+        alert("You are being recorded");
+      }
+    };
+
+    socket.on("update-recording-status", handleRecordingStarted);
+    return () => {
+      socket.off("update-recording-status", handleRecordingStarted);
+    };
+  }, []);
+
   const handleMeasureClick = async (x: number, y: number) => {
     if (!isMeasuring) return; // Only process clicks if measuring mode is active
 
@@ -474,7 +491,9 @@ const PlayerMap = ({
               boxShadow: "0px 2px 5px rgba(0,0,0,0.2)", // Optional styling for visibility
             }}
           >
-            {measuredDistance.toFixed(2)} units
+            {gridData && gridData.columnWidth && gridData.columnHeight
+              ? `${measuredDistance.toFixed(2)} squares`
+              : `${measuredDistance.toFixed(2)} pixels`}
           </div>
         )}
       </div>
