@@ -712,7 +712,7 @@ const DownloadModal: React.FC<ModalProps> = ({
             {/* New button to open the ZoomModal */}
             <div style={{ marginTop: "16px", textAlign: "center" }}>
               <button
-                onClick={openZoomModal}
+                onClick={() => window.open("https://zoom.com/signin", "_blank")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#007bff",
@@ -723,10 +723,10 @@ const DownloadModal: React.FC<ModalProps> = ({
                   marginBottom: "16px",
                 }}
               >
-                Retrieve Zoom Recordings
+                Open Zoom
               </button>
             </div>
-            {/* Conditionally render the ZoomModal */}
+            {/* Conditionally render the ZoomModal
             {showZoomFileSelector && (
               <ZoomFileSelectorModal
                 onClose={() => setShowZoomFileSelector(false)}
@@ -741,7 +741,7 @@ const DownloadModal: React.FC<ModalProps> = ({
                 onClose={closeZoomModal}
                 onDownloadComplete={handleZoomDownloadComplete}
               />
-            )}
+            )} */}
             <p>Select a session to download:</p>
             <div style={listContainerStyle}>
               <ul style={{ padding: 0, listStyle: "none" }}>
