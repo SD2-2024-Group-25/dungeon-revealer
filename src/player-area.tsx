@@ -182,6 +182,23 @@ const PlayerMap = ({
     null
   );
 
+  React.useEffect(() => {
+    const handleRecordingStarted = ({
+      isRecording,
+    }: {
+      isRecording: boolean;
+    }) => {
+      if (isRecording) {
+        alert("You are being recorded");
+      }
+    };
+
+    socket.on("update-recording-status", handleRecordingStarted);
+    return () => {
+      socket.off("update-recording-status", handleRecordingStarted);
+    };
+  }, []);
+
   const handleMeasureClick = async (x: number, y: number) => {
     if (!isMeasuring) return; // Only process clicks if measuring mode is active
 
@@ -399,7 +416,7 @@ const PlayerMap = ({
       setMapOffset({ left: rect.left, top: rect.top });
     }
   }, [currentMap.data?.activeMap]);
-
+  const noteWindowActions = useNoteWindowActions();
   return (
     <>
       <div style={{ cursor: "grab", background: "black", height: "100vh" }}>
@@ -474,7 +491,9 @@ const PlayerMap = ({
               boxShadow: "0px 2px 5px rgba(0,0,0,0.2)", // Optional styling for visibility
             }}
           >
-            {measuredDistance.toFixed(2)} units
+            {gridData && gridData.columnWidth && gridData.columnHeight
+              ? `${measuredDistance.toFixed(2)} squares`
+              : `${measuredDistance.toFixed(2)} pixels`}
           </div>
         )}
       </div>
@@ -554,7 +573,21 @@ const PlayerMap = ({
                           }}
                         >
                           <Icon.BookOpen boxSize="20px" />
-                          <Icon.Label>Notes</Icon.Label>
+                          <Icon.Label>Player Notes</Icon.Label>
+                        </Toolbar.LongPressButton>
+                      </Toolbar.Item>
+                      <Toolbar.Item isActive>
+                        <Toolbar.LongPressButton
+                          onClick={() => {
+                            noteWindowActions.showNoteInWindow(
+                              null,
+                              "note-editor",
+                              true
+                            );
+                          }}
+                        >
+                          <Icon.BookOpen boxSize="20px" />
+                          <Icon.Label>DM Notes</Icon.Label>
                         </Toolbar.LongPressButton>
                       </Toolbar.Item>
                       <Toolbar.Item isActive>
