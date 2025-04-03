@@ -258,6 +258,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
+  /*
   //retrieves map file for a specific iteration
   apiRouter.get(
     "/iteration/:sessionName/:iterationName/:map",
@@ -278,6 +279,62 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       }
 
       res.sendFile(mapFilePath);
+    }
+  );
+  */
+
+  //retrieves map file for a specific iteration
+  apiRouter.get("/iteration/:sessionName/:iterationName", async (req, res) => {
+    const { sessionName, iterationName } = req.params;
+
+    const fileExtensions = ["jpg", "jpeg", "svg", "png"];
+    let mapFilePath = null;
+
+    for (const ext of fileExtensions) {
+      const possibleMapPath = path.join(
+        researchPath,
+        "saved",
+        sessionName,
+        iterationName,
+        `map.${ext}`
+      );
+      console.log("Checking:", possibleMapPath);
+      if (fs.existsSync(possibleMapPath)) {
+        mapFilePath = possibleMapPath;
+        break;
+      }
+    }
+
+    if (!mapFilePath) {
+      console.error(
+        "Map file not found for session:",
+        sessionName,
+        iterationName
+      );
+      return res.status(404).json({ error: "Map file not found " });
+    }
+    res.sendFile(mapFilePath);
+  });
+
+  //retrieves fog progress and fog live file for a specific iteration
+  apiRouter.get(
+    "/iteration/:sessionName/:iterationName/:fileName",
+    async (req, res) => {
+      const { sessionName, iterationName, fileName } = req.params;
+      const filePath = path.join(
+        researchPath,
+        "saved",
+        sessionName,
+        iterationName,
+        fileName
+      );
+
+      console.log("Checking fog file:", filePath);
+      if (!fs.existsSync(filePath)) {
+        console.error("File not found:", filePath);
+        return res.status(404).json({ error: `${fileName} not found` });
+      }
+      res.sendFile(filePath);
     }
   );
 

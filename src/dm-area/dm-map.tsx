@@ -100,6 +100,7 @@ import { typeFromAST } from "graphql";
 import { position } from "polished";
 import { useSocket } from "../socket";
 import * as d3 from "d3";
+import { getOptimalDimensions } from "../util";
 
 type ToolMapRecord = {
   name: string;
@@ -107,6 +108,40 @@ type ToolMapRecord = {
   tool: MapTool;
   MenuComponent: null | (() => React.ReactElement);
 };
+
+async function getSvgDimensions(svgUrl: string) {
+  try {
+    const response = await fetch(svgUrl);
+    const svgText = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, "image/svg+xml");
+    const svgEl = doc.querySelector("svg");
+    if (!svgEl) {
+      console.warn("No <svg> element found, using fallback dimensions.");
+      return { width: 800, height: 600 }; //Fallback values
+    }
+    let width = svgEl.getAttribute("width");
+    let height = svgEl.getAttribute("height");
+
+    //if missing, try to derive dimensions from the viewBox
+    const viewBox = svgEl.getAttribute("viewBox");
+    if ((!width || !height) && viewBox) {
+      const parts = viewBox.split(" ").map(Number);
+      if (parts.length === 4) {
+        width = parts[2].toString();
+        height = parts[3].toString();
+      }
+    }
+
+    return {
+      width: Number(width) || 800,
+      height: Number(height) || 600,
+    };
+  } catch (e) {
+    console.error("Error fetching SVG dimensions:", e);
+    return { width: 800, height: 600 };
+  }
+}
 
 const BrushSettings = (): React.ReactElement => {
   const { state, setState } = React.useContext(BrushToolContext);
@@ -770,19 +805,33 @@ const DownloadModal: React.FC<ModalProps> = ({
 };
 
 interface ViewModalProps {
-  show: boolean;
+  /*show: boolean;
   onClose: () => void;
   sessionName: string;
   //mapName: string;
+  onSessionSelect: (session: string) => void; */
+  show: boolean;
+  onClose: () => void;
+  sessionName: string;
   onSessionSelect: (session: string) => void;
+  map: {
+    grid?: {
+      offsetX?: number;
+      offsetY?: number;
+      columnWidth: number;
+      columnHeight: number;
+    };
+  };
+  onOpenDownload: () => void;
 }
 
 const ViewModal: React.FC<ViewModalProps> = ({
   show,
   onClose,
   sessionName,
-  //mapName,
   onSessionSelect,
+  map,
+  onOpenDownload,
 }) => {
   const [sessions, setSessions] = React.useState<string[]>([]);
   const [iterations, setIterations] = React.useState<string[]>([]);
@@ -798,6 +847,31 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const [showHerdModal, setShowHerdModal] = React.useState(false);
   const [showWhiteboardModal, setShowWhiteboardModal] = React.useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const [showGrid, setShowGrid] = React.useState<boolean>(false);
+  const [canvasSize, setCanvasSize] = React.useState<{
+    width: number;
+    height: number;
+  }>({ width: 800, height: 600 });
+  const [playerView, setPlayerView] = React.useState<boolean>(true);
+  const [showDownloadModal, setShowDownloadModal] = React.useState(false);
+
+  const goToPreviousIteration = () => {
+    if (selectedIteration) {
+      const index = iterations.indexOf(selectedIteration);
+      if (index > 0) {
+        setSelectedIteration(iterations[index - 1]);
+      }
+    }
+  };
+
+  const goToNextIteration = () => {
+    if (selectedIteration) {
+      const index = iterations.indexOf(selectedIteration);
+      if (index < iterations.length - 1) {
+        setSelectedIteration(iterations[index + 1]);
+      }
+    }
+  };
 
   // Fetch sessions if modal is shown and no session is selected
   React.useEffect(() => {
@@ -835,7 +909,14 @@ const ViewModal: React.FC<ViewModalProps> = ({
           const data = await response.json();
 
           const filteredIterations = data.iterations.filter(
-            (iteration: string) => iteration.toLowerCase() !== "notes"
+            (iteration: string) => {
+              const lower = iteration.toLowerCase();
+              return (
+                lower !== "notes" &&
+                lower !== "whiteboard" &&
+                lower !== "zoom_data"
+              );
+            }
           );
           setIterations(filteredIterations);
 
@@ -874,39 +955,73 @@ const ViewModal: React.FC<ViewModalProps> = ({
           const settings = await settingsResponse.json();
           console.log("Fetched settings:", settings);
 
-          const dynamicMapName = settings.mapPath || "map.jpg";
-          const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}/${dynamicMapName}`;
+          //const dynamicMapName = settings.mapPath || "map.jpg";
+          //const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}/${dynamicMapName}`;
+          const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}`;
           console.log("Loading map image from:", mapImageUrl);
 
           const mapImage = new Image();
           mapImage.src = mapImageUrl;
 
-          mapImage.onload = () => {
-            const canvas = canvasRef.current;
+          mapImage.onload = async () => {
+            let imgWidth = mapImage.naturalWidth;
+            let imgHeight = mapImage.naturalHeight;
 
+            if (
+              mapImage.src.toLowerCase().endsWith(".svg") &&
+              (!imgWidth || !imgHeight)
+            ) {
+              const dimensions = await getSvgDimensions(mapImage.src);
+              imgWidth = dimensions.width;
+              imgHeight = dimensions.height;
+            }
+
+            /*
+            if (imgWidth > 800 || imgHeight > 600) {
+              const scale = Math.min(800 / imgWidth, 600 / imgHeight);
+              imgWidth = Math.floor(imgWidth * scale);
+              imgHeight = Math.floor(imgHeight * scale);
+            }*/
+
+            //Optimal dimensions for the grid
+            const optimal = getOptimalDimensions(imgWidth, imgHeight, 800, 600);
+            imgWidth = Math.floor(optimal.width);
+            imgHeight = Math.floor(optimal.height);
+
+            setCanvasSize({ width: imgWidth, height: imgHeight });
+
+            const canvas = canvasRef.current;
             if (!canvas) {
-              console.error("Canvas element is not available.");
               return;
             }
+            canvas.width = imgWidth;
+            canvas.height = imgHeight;
+
             //creating the canvas so the map can be drawn on
             const ctx = canvas.getContext("2d");
-
             if (!ctx) {
               console.error("Unable to get 2D context from canvas.");
               return;
             }
-
             //clears the canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            if (
+              mapImage.src.toLowerCase().endsWith(".svg") &&
+              (!imgWidth || !imgHeight)
+            ) {
+              const dimensions = await getSvgDimensions(mapImage.src);
+              imgWidth = dimensions.width;
+              imgHeight = dimensions.height;
+            }
+
             const scale = Math.min(
-              canvas.width / mapImage.naturalWidth,
-              canvas.height / mapImage.naturalHeight
+              canvas.width / imgWidth,
+              canvas.height / imgHeight
             );
 
-            //calculate scale factor to maintain aspect ratio
-            const drawWidth = mapImage.naturalWidth * scale;
-            const drawHeight = mapImage.naturalHeight * scale;
+            const drawWidth = imgWidth * scale;
+            const drawHeight = imgHeight * scale;
 
             //calculate offsets to center the image in the canvas
             const offsetX = (canvas.width - drawWidth) / 2;
@@ -916,93 +1031,188 @@ const ViewModal: React.FC<ViewModalProps> = ({
             ctx.save();
             //translate and scale the canvas so that drawing operations use the iamges original coordinate system
             ctx.translate(offsetX, offsetY);
-            ctx.scale(scale, scale);
+            //ctx.scale(scale, scale);
 
-            //drawing the image at its original dimensions
-            ctx.drawImage(
-              mapImage,
-              0,
-              0,
-              mapImage.naturalWidth,
-              mapImage.naturalHeight
-            );
+            //drawing the base map image at its original dimensions
+            ctx.drawImage(mapImage, 0, 0, imgWidth, imgHeight);
             console.log("Map image drawn to canvas with transformation.");
 
-            //drawing a grid overlay using the original coordinates
-            const gridSpacing = 50;
-            ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
-            ctx.lineWidth = 1;
-            for (let x = 0; x <= mapImage.naturalWidth; x += gridSpacing) {
-              ctx.beginPath();
-              ctx.moveTo(x, 0);
-              ctx.lineTo(x, mapImage.naturalHeight);
-              ctx.stroke();
+            //Load and draw fog layers
+            const loadImage = (url: string): Promise<HTMLImageElement> =>
+              new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = () =>
+                  reject(new Error(`Filed to load image at ${url}`));
+                img.src = url;
+              });
+
+            //construct fog image urls
+            const fogLiveUrl = `${mapImageUrl}/fog.live.png`;
+            const fogProgressUrl = `${mapImageUrl}/fog.progress.png`;
+            let fogLiveImg: HTMLImageElement | null = null;
+            let fogprogressIMG: HTMLImageElement | null = null;
+            try {
+              fogLiveImg = await loadImage(fogLiveUrl);
+              console.log("Fog live layer loaded.");
+            } catch (e) {
+              console.warn("Fog live image not found:", e);
             }
-            for (let y = 0; y <= mapImage.naturalHeight; y += gridSpacing) {
-              ctx.beginPath();
-              ctx.moveTo(0, y);
-              ctx.lineTo(mapImage.naturalWidth, y);
-              ctx.stroke();
+            try {
+              fogprogressIMG = await loadImage(fogProgressUrl);
+              console.log("Fog progress layer loaded.");
+            } catch (e) {
+              console.warn("Fog progress image not found:", e);
+            }
+
+            if (playerView) {
+              //Draw fog layers
+              if (fogLiveImg) {
+                ctx.drawImage(fogLiveImg, 0, 0, imgWidth, imgHeight);
+                console.log("Fog live layer drawn");
+              }
+            } else if (!playerView) {
+              if (fogprogressIMG) {
+                //opaque fog progress layer for DM view
+                ctx.save();
+                ctx.globalAlpha = 0.5;
+                ctx.drawImage(fogprogressIMG, 0, 0, imgWidth, imgHeight);
+                ctx.restore();
+
+                console.log("Fog progress layer drawn");
+              }
+            }
+
+            //just for the grid!!!
+
+            if (showGrid) {
+              //drawing a grid overlay using the original coordinates
+              const ratio = optimal.ratio;
+
+              const scaledOffsetX = (map.grid?.offsetX ?? 0) * ratio;
+              const scaledOffsetY = (map.grid?.offsetY ?? 0) * ratio;
+              const colW = (map.grid?.columnWidth ?? 50) * ratio;
+              const colH = (map.grid?.columnHeight ?? 50) * ratio;
+
+              ctx.strokeStyle = "rgb(0, 0, 0)";
+              ctx.lineWidth = 1;
+
+              //for(let x = scaledOffsetX; x <= scaledOffsetX + mapImage.naturalWidth; x += colW){
+              for (
+                let x = scaledOffsetX;
+                x <= scaledOffsetX + canvas.width;
+                x += colW
+              ) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, mapImage.naturalHeight);
+                ctx.stroke();
+              }
+
+              //for(let y = scaledOffsetY; y <= scaledOffsetY + mapImage.naturalWidth; y += colH){
+              for (
+                let y = scaledOffsetY;
+                y <= scaledOffsetY + canvas.height;
+                y += colH
+              ) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(mapImage.naturalWidth, y);
+                ctx.stroke();
+              }
+
+              /*const gridSpacing = 50;
+              ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
+              ctx.lineWidth = 1;
+              for (let x = 0; x <= mapImage.naturalWidth; x += gridSpacing) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, mapImage.naturalHeight);
+                ctx.stroke();
+              }
+              for (let y = 0; y <= mapImage.naturalHeight; y += gridSpacing) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(mapImage.naturalWidth, y);
+                ctx.stroke();
+              }*/
             }
 
             if (settings.tokens && Array.isArray(settings.tokens)) {
               settings.tokens.forEach((token: any) => {
-                //if the token contains an image
-                if (token.tokenImageId) {
-                  //if token with image has a label
-                  if (token.label) {
-                    const nonscaledFontSize = 14;
-                    ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "bottom";
+                if (!playerView || token.isVisibleForPlayers) {
+                  //if the token contains an image
+                  if (token.tokenImageId) {
+                    //if token with image has a label
+                    if (token.label) {
+                      const nonscaledFontSize = 14;
+                      ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
+                      ctx.textAlign = "center";
+                      ctx.textBaseline = "bottom";
 
-                    const textMetrics = ctx.measureText(token.label);
-                    const textWidth = textMetrics.width;
-                    const textHeight = nonscaledFontSize / scale;
+                      const textMetrics = ctx.measureText(token.label);
+                      const textWidth = textMetrics.width;
+                      const textHeight = nonscaledFontSize / scale;
 
-                    ctx.fillStyle = "white";
-                    ctx.fillRect(
-                      token.x - textWidth / 2 - (textWidth * 0.05) / 2,
-                      token.y + (token.radius - textHeight * 0.1),
-                      textWidth + textWidth * 0.05,
-                      textHeight + textHeight * 0.05
+                      ctx.fillStyle = "white";
+                      ctx.fillRect(
+                        token.x - textWidth / 2 - (textWidth * 0.05) / 2,
+                        token.y + (token.radius - textHeight * 0.1),
+                        textWidth + textWidth * 0.05,
+                        textHeight + textHeight * 0.05
+                      );
+
+                      ctx.fillStyle = "#000";
+                      ctx.textAlign = "center";
+                      ctx.fillText(
+                        token.label,
+                        token.x,
+                        token.y +
+                          token.radius +
+                          (token.radius / 2 - textHeight * 0.05)
+                      );
+                    }
+
+                    const tokenImage = new Image();
+                    //circle for token is created
+                    ctx.beginPath();
+                    ctx.arc(
+                      token.x * optimal.ratio,
+                      token.y * optimal.ratio,
+                      token.radius * optimal.ratio,
+                      0,
+                      Math.PI * 2
                     );
-
-                    ctx.fillStyle = "#000";
-                    ctx.textAlign = "center";
-                    ctx.fillText(
-                      token.label,
-                      token.x,
-                      token.y +
-                        token.radius +
-                        (token.radius / 2 - textHeight * 0.05)
-                    );
+                    ctx.fillStyle = token.color;
+                    ctx.fill();
+                    ctx.closePath();
                   }
+                  //if the token doesnt contain an image draw circle only
+                  else {
+                    ctx.beginPath();
+                    ctx.arc(
+                      token.x * optimal.ratio,
+                      token.y * optimal.ratio,
+                      token.radius * optimal.ratio,
+                      0,
+                      Math.PI * 2
+                    );
+                    ctx.fillStyle = token.color;
+                    ctx.fill();
+                    ctx.closePath();
 
-                  const tokenImage = new Image();
-                  //tokenImage.src =
-                  //circle for token is created
-                  ctx.beginPath();
-                  ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
-                  ctx.fillStyle = token.color;
-                  ctx.fill();
-                  ctx.closePath();
-                }
-                //if the token doesnt contain an image draw circle only
-                else {
-                  ctx.beginPath();
-                  ctx.arc(token.x, token.y, token.radius, 0, Math.PI * 2);
-                  ctx.fillStyle = token.color;
-                  ctx.fill();
-                  ctx.closePath();
-
-                  if (token.label) {
-                    const nonscaledFontSize = 14;
-                    ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
-                    ctx.fillStyle = "#000";
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "middle";
-                    ctx.fillText(token.label, token.x, token.y);
+                    if (token.label) {
+                      const nonscaledFontSize = 14;
+                      ctx.font = `Bold ${nonscaledFontSize / scale}px Roboto`;
+                      ctx.fillStyle = "#000";
+                      ctx.textAlign = "center";
+                      ctx.textBaseline = "middle";
+                      ctx.fillText(
+                        token.label,
+                        token.x * optimal.ratio,
+                        token.y * optimal.ratio
+                      );
+                    }
                   }
                 }
               });
@@ -1010,10 +1220,8 @@ const ViewModal: React.FC<ViewModalProps> = ({
             } else {
               console.log("No tokens found in settings.");
             }
-
             ctx.restore();
           };
-
           mapImage.onerror = (error) => {
             console.error("Error loading map image:", error);
           };
@@ -1023,23 +1231,81 @@ const ViewModal: React.FC<ViewModalProps> = ({
       };
       drawMapWithTokens();
     }
-  }, [show, selectedIteration, sessionName]);
+  }, [show, selectedIteration, sessionName, showGrid, playerView]);
 
   if (!show) return null;
 
   return (
     <div style={viewModalOverlayStyle}>
       <div style={viewModalStyle}>
+        {/* Button that takes you to the previous page */}
+        <button
+          style={{
+            position: "absolute",
+            right: "97%",
+            top: "20px",
+            cursor: "pointer",
+            background: "none",
+            border: "none",
+            //padding: "5px",
+          }}
+          onClick={() => {
+            setPlayerView(true);
+            setShowGrid(false);
+            onOpenDownload();
+          }}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ display: "block" }}
+          >
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+        </button>
+
+        {/* Button that closes the view modal */}
+        <button
+          style={{
+            position: "absolute",
+            left: "97%",
+            top: "10px",
+            cursor: "pointer",
+            //padding: "5px",
+          }}
+          onClick={() => {
+            onClose();
+            setPlayerView(true);
+            setShowGrid(false);
+          }}
+        >
+          <span style={{ marginRight: "5px", fontSize: "30px" }}>&times;</span>
+        </button>
+
         {/* Button that opens the movement graph */}
         <button
           onClick={() => setShowMovementModal(true)}
           style={{
             position: "absolute",
+            //left: "85%",
+            right: "15px",
+            top: "50px",
+            cursor: "pointer",
+            //border: "2px solid #ccc",
+            padding: "5px",
+            /*   position: "absolute",
             left: "85%",
             top: "10px",
             cursor: "pointer",
             border: "2px solid #ccc",
-            padding: "5px",
+            padding: "5px",*/
           }}
         >
           Open Movement Graph
@@ -1050,11 +1316,18 @@ const ViewModal: React.FC<ViewModalProps> = ({
           onClick={() => setShowHerdModal(true)}
           style={{
             position: "absolute",
+            right: "15px",
+            top: "90px",
+            cursor: "pointer",
+            //border: "2px solid #ccc",
+            padding: "5px",
+
+            /*  position: "absolute",
             left: "85%",
             top: "50px",
             cursor: "pointer",
             border: "2px solid #ccc",
-            padding: "5px",
+            padding: "5px", */
           }}
         >
           Open Herd Graph
@@ -1065,10 +1338,12 @@ const ViewModal: React.FC<ViewModalProps> = ({
           onClick={() => setShowWhiteboardModal(true)}
           style={{
             position: "absolute",
-            left: "85%",
-            top: "90px",
+            //left: "85%",
+            right: "15px",
+            top: "130px",
+            //top: "90px",
             cursor: "pointer",
-            border: "2px solid #ccc",
+            //border: "2px solid #ccc",
             padding: "5px",
           }}
         >
@@ -1086,10 +1361,20 @@ const ViewModal: React.FC<ViewModalProps> = ({
             transition: "width 0.3s ease",
           }}
         >
-          {isSidebarOpen ? "Close" : "Open"}
+          {isSidebarOpen ? (
+            <span style={{ marginRight: "5px", fontSize: "30px" }}>
+              &#8249;
+            </span>
+          ) : (
+            <span style={{ marginRight: "5px", fontSize: "30px" }}>
+              &#8250;
+            </span>
+          )}
+          {/*isSidebarOpen ? "Close" : "Open"*/}
         </button>
 
-        <div style={{ display: "flex", height: "calc(100% - 40px)" }}>
+        {/* div for left sidebar and right panel */}
+        <div style={{ display: "flex", height: "100%" }}>
           {/* Left Sidebar */}
           {isSidebarOpen && (
             <div
@@ -1140,23 +1425,61 @@ const ViewModal: React.FC<ViewModalProps> = ({
               )}
             </div>
           )}
-          {/* Right Panel */}
+
+          {/* HERE */}
           <div
             style={{
-              flex: 1,
               display: "flex",
-              flexDirection: "column",
+              flex: 1,
+              flexDirection: "row",
               alignItems: "center",
-              padding: "10px",
             }}
           >
-            {sessionName ? (
-              <>
-                <h2>{sessionName}</h2>
-                {selectedIteration ? (
-                  <>
-                    <h3>{selectedIteration}</h3>
-                    <canvas
+            {/* Main Panel */}
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                //border: "1px solid #000",
+                alignItems: "center",
+                maxHeight: "calc(90vh - 5vh)",
+                //padding: "10px",
+              }}
+            >
+              {sessionName ? (
+                <>
+                  <h2>{sessionName}</h2>
+                  {selectedIteration ? (
+                    <>
+                      <h3>{selectedIteration}</h3>
+
+                      <div
+                        style={{
+                          position: "relative",
+                          width: `${canvasSize.width}px`,
+                          height: `${canvasSize.height}px`,
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          overflow: "auto",
+                          border: "1px solid #ccc",
+                        }}
+                      >
+                        {/* Scrollable container for map */}
+                        <canvas
+                          ref={canvasRef}
+                          style={{
+                            border: "1px solid #ccc",
+                            width: "100%",
+                            height: "100%",
+                            overflow: "auto",
+                            objectFit: "contain",
+                          }}
+                        />
+                      </div>
+
+                      {/*  <canvas
                       ref={canvasRef}
                       width={800}
                       height={600}
@@ -1166,20 +1489,137 @@ const ViewModal: React.FC<ViewModalProps> = ({
                         objectFit: "contain",
                       }}
                     />
-                  </>
-                ) : (
-                  <p>Please select an iteration</p>
-                )}
-              </>
-            ) : (
-              <p>Please select a session</p>
-            )}
+
+                    */}
+                    </>
+                  ) : (
+                    <p>Please select an iteration</p>
+                  )}
+                </>
+              ) : (
+                <p>Please select a session</p>
+              )}
+
+              {selectedIteration && (
+                <div
+                  style={{
+                    //marginTop: "1rem",
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: "1rem",
+                  }}
+                >
+                  <button onClick={goToPreviousIteration}>
+                    <span style={{ marginRight: "5px", fontSize: "30px" }}>
+                      &#8249;
+                    </span>
+                  </button>
+                  <button onClick={goToNextIteration}>
+                    <span style={{ marginRight: "5px", fontSize: "30px" }}>
+                      &#8250;
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                marginTop: "1rem",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                border: "3px solid #ccc",
+                //gap: "12px",
+              }}
+            >
+              <div style={{ display: "flex" }}>
+                <button
+                  style={{
+                    ...(playerView ? activeSegmentStyle : inactiveSegmentStyle),
+                    flexGrow: "1",
+
+                    minWidth: "100px",
+                    maxHeight: "40px",
+                    borderLeft: "2px solid #ccc",
+                    borderTop: "2px solid #ccc",
+                    borderBottom: "2px solid #ccc",
+                    borderTopLeftRadius: "10px",
+                    borderBottomLeftRadius: "10px",
+                  }}
+                  onClick={() => setPlayerView(true)}
+                >
+                  Player View
+                </button>
+                <button
+                  style={{
+                    ...(playerView ? inactiveSegmentStyle : activeSegmentStyle),
+                    flexGrow: "1",
+                    minWidth: "100px",
+                    maxHeight: "40px",
+                    borderRight: "2px solid #ccc",
+                    borderTop: "2px solid #ccc",
+                    borderBottom: "2px solid #ccc",
+                    borderTopRightRadius: "10px",
+                    borderBottomRightRadius: "10px",
+                  }}
+                  onClick={() => setPlayerView(false)}
+                >
+                  DM View
+                </button>
+              </div>
+              <div style={{ display: "flex" }}>
+                <button
+                  style={{
+                    ...(showGrid ? inactiveSegmentStyle : activeSegmentStyle),
+                    flexGrow: "1",
+                    minWidth: "100px",
+                    maxHeight: "40px",
+                    borderLeft: "2px solid #ccc",
+                    borderTop: "2px solid #ccc",
+                    borderBottom: "2px solid #ccc",
+                    borderTopLeftRadius: "10px",
+                    borderBottomLeftRadius: "10px",
+                  }}
+                  onClick={() => setShowGrid(false)}
+                >
+                  Grid Off
+                </button>
+                <button
+                  style={{
+                    ...(showGrid ? activeSegmentStyle : inactiveSegmentStyle),
+                    flexGrow: "1",
+                    minWidth: "100px",
+                    maxHeight: "40px",
+                    borderRight: "2px solid #ccc",
+                    borderTop: "2px solid #ccc",
+                    borderBottom: "2px solid #ccc",
+                    borderTopRightRadius: "10px",
+                    borderBottomRightRadius: "10px",
+                  }}
+                  onClick={() => setShowGrid(true)}
+                >
+                  Grid On
+                </button>
+              </div>
+            </div>
+
+            {/* HERE */}
           </div>
         </div>
+        {/*
         <button onClick={onClose} style={viewCloseButtonStyle}>
           Close
         </button>
+        */}
       </div>
+
+      {showDownloadModal && (
+        <DownloadModal
+          show={showDownloadModal}
+          onClose={() => setShowDownloadModal(false)}
+        />
+      )}
       {showMovementModal && (
         <MovementGraphModal
           show={showMovementModal}
@@ -1203,6 +1643,24 @@ const ViewModal: React.FC<ViewModalProps> = ({
       )}
     </div>
   );
+};
+
+const activeSegmentStyle: React.CSSProperties = {
+  backgroundColor: "#666",
+  color: "#fff",
+  padding: "0.5rem 0.5rem",
+  width: "100px",
+  //border: 'none',
+  cursor: "pointer",
+};
+
+const inactiveSegmentStyle: React.CSSProperties = {
+  backgroundColor: "#fff",
+  color: "#000",
+  padding: "0.5rem 0.5rem",
+  width: "100px",
+  //border: 'none',
+  cursor: "pointer",
 };
 
 interface ClearModalProps {
@@ -1551,11 +2009,12 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
             <div
               style={{
                 position: "absolute",
-                top: 60,
+                top: 70,
                 left: "50%",
                 transform: "translateX(-50%)",
                 display: "flex",
                 gap: "10px",
+                //zIndex: 2,
               }}
             >
               <button
@@ -2219,6 +2678,7 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
             )}
           </div>
         </div>
+
         <button onClick={onClose} style={whiteboardCloseButtonStyle}>
           Close
         </button>
@@ -2797,8 +3257,8 @@ const viewModalStyle: React.CSSProperties = {
   padding: "20px",
   borderRadius: "8px",
   textAlign: "center",
-  width: "80vw",
-  height: "80vh",
+  width: "95vw",
+  height: "90vh",
   zIndex: 1000000000,
 };
 
@@ -3084,6 +3544,7 @@ export const DmMap = (props: {
 
   const [isDownloadModalVisible, setDownloadModalVisible] =
     React.useState(false);
+
   const [isSaveModalVisible, setSaveModalVisible] = React.useState(false);
 
   const openDownloadModal = async () => {
@@ -3104,6 +3565,11 @@ export const DmMap = (props: {
 
   const [isViewModalOpen, setViewModalOpen] = React.useState(false);
   const [selectedSessionName, setSelectedSessionName] = React.useState("");
+
+  const openDownloadAndCloseView = () => {
+    setViewModalOpen(false);
+    setDownloadModalVisible(true);
+  };
 
   const handleViewClick = (sessionName: string) => {
     console.log(
@@ -3411,6 +3877,16 @@ export const DmMap = (props: {
                   show={isViewModalOpen}
                   onClose={() => setViewModalOpen(false)}
                   sessionName={selectedSessionName}
+                  onSessionSelect={() => {}}
+                  map={{
+                    grid: {
+                      offsetX: map.grid?.offsetX ?? 0,
+                      offsetY: map.grid?.offsetY ?? 0,
+                      columnWidth: map.grid?.columnWidth ?? 50,
+                      columnHeight: map.grid?.columnHeight ?? 50,
+                    },
+                  }}
+                  onOpenDownload={openDownloadAndCloseView}
                 />
                 {showZoomFileSelector && (
                   <ZoomFileSelectorModal
