@@ -748,6 +748,23 @@ const DownloadModal: React.FC<ModalProps> = ({
           <p>No sessions available to view or download</p>
         ) : (
           <>
+            {/* New button to open the ZoomModal */}
+            <div style={{ marginTop: "16px", textAlign: "center" }}>
+              <button
+                onClick={() => window.open("https://zoom.com/signin", "_blank")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#007bff",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  marginBottom: "16px",
+                }}
+              >
+                Open Zoom
+              </button>
+            </div>
             {/* Conditionally render the ZoomModal */}
             {showZoomFileSelector && (
               <ZoomFileSelectorModal
