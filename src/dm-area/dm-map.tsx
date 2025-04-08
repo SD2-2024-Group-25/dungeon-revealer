@@ -2736,8 +2736,9 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
                       style={{
                         marginTop: "50px",
                         width: "100%",
-                        textAlign: "center",
-                        overflow: "hidden",
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
                         maxHeight: "calc(100vh - 250px)",
                       }}
                     >
@@ -2745,9 +2746,8 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
                         src={imageUrl}
                         alt={displayName}
                         style={{
-                          display: "block",
-                          width: "100%",
-                          height: "auto",
+                          maxWidth: "100%",
+                          maxHeight: "100%",
                           objectFit: "contain",
                         }}
                       />
