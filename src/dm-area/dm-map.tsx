@@ -2739,7 +2739,8 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
                         display: "flex",
                         justifyContent: "center",
                         alignItems: "center",
-                        maxHeight: "calc(100vh - 250px)",
+                        maxHeight: "calc(80vh - 150px)",
+                        overflow: "hidden",
                       }}
                     >
                       <img
