@@ -134,12 +134,12 @@ router.get("/iterationMap", async (req, res) => {
 });
 
 router.get("/whiteboardIterations", async (req, res) => {
-  // Gets all the images in whiteboard folder
+  // API to actually get whiteboard image
   const { sessionName } = req.query;
   if (!sessionName) {
+    console.error("Missing sessionName in query:", req.query);
     return res.status(400).json({ error: "Missing sessionName" });
   }
-
   try {
     const basePath = path.resolve("./");
     const whiteboardFolder = path.join(
@@ -151,17 +151,44 @@ router.get("/whiteboardIterations", async (req, res) => {
       "whiteboard"
     );
 
-    const images = await fs.readdir(whiteboardFolder);
+    if (!(await fs.pathExists(whiteboardFolder))) {
+      console.error("Whiteboard folder not found:", whiteboardFolder);
+      return res.status(404).json({ error: "Whiteboard folder not found." });
+    }
 
+    const images = await fs.readdir(whiteboardFolder);
     const filteredImages = images.filter((file) =>
       file.toLowerCase().endsWith(".png")
     );
 
-    return res.status(200).json({ images: filteredImages });
+    const imageUrls = filteredImages.map(
+      (file) => `/api/fetch/iteration/whiteboard/${sessionName}/${file}`
+    );
+    console.log("Returning whiteboard image URLs:", imageUrls);
+    return res.status(200).json({ images: imageUrls });
   } catch (error) {
     console.error("Error fetching whiteboard:", error);
     return res.status(500).json({ error: "Failed to fetch whiteboard." });
   }
+});
+
+// Route to serve whiteboard image files
+router.get("/iteration/whiteboard/:sessionName/:fileName", async (req, res) => {
+  const { sessionName, fileName } = req.params;
+  const filePath = path.join(
+    path.resolve("./"),
+    "public",
+    "research",
+    "saved",
+    sessionName,
+    "whiteboard",
+    fileName
+  );
+  if (!(await fs.pathExists(filePath))) {
+    console.error("Image not found at:", filePath);
+    return res.status(404).json({ error: "Image not found." });
+  }
+  res.sendFile(filePath);
 });
 
 module.exports = router;
