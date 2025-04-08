@@ -2611,7 +2611,7 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
           const data = await response.json();
           setImages(data.images || []);
           if (data.images && data.images.length > 0) {
-            setSelectedImage(data.images[0]); // full URL returned from API
+            setSelectedImage(data.images[0]);
           } else {
             setSelectedImage("");
           }
@@ -2698,6 +2698,7 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
                 {selectedImage ? (
                   <>
                     <h3>{displayName}</h3>
+
                     <div
                       style={{
                         display: "flex",
@@ -2732,8 +2733,23 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
                         Next
                       </button>
                     </div>
-                    <div style={{ marginTop: "50px" }}>
-                      <img src={imageUrl} alt={displayName} style={imgStyle} />
+
+                    <div
+                      style={{
+                        marginTop: "50px",
+                        width: "100%",
+                        textAlign: "center",
+                      }}
+                    >
+                      <img
+                        src={imageUrl}
+                        alt={displayName}
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "calc(100vh - 250px)",
+                          objectFit: "contain",
+                        }}
+                      />
                     </div>
                   </>
                 ) : (
