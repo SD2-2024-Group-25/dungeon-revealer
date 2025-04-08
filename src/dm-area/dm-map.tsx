@@ -2698,7 +2698,6 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
                 {selectedImage ? (
                   <>
                     <h3>{displayName}</h3>
-
                     <div
                       style={{
                         display: "flex",
@@ -2733,20 +2732,22 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
                         Next
                       </button>
                     </div>
-
                     <div
                       style={{
                         marginTop: "50px",
                         width: "100%",
                         textAlign: "center",
+                        overflow: "hidden",
+                        maxHeight: "calc(100vh - 250px)",
                       }}
                     >
                       <img
                         src={imageUrl}
                         alt={displayName}
                         style={{
-                          maxWidth: "100%",
-                          maxHeight: "calc(100vh - 250px)",
+                          display: "block",
+                          width: "100%",
+                          height: "auto",
                           objectFit: "contain",
                         }}
                       />
@@ -2761,7 +2762,6 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
             )}
           </div>
         </div>
-
         <button onClick={onClose} style={whiteboardCloseButtonStyle}>
           Close
         </button>
