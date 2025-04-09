@@ -128,3 +128,99 @@ Navigate to the server using a web browser and wait at the home page. (The conne
 ## Contributing
 
 See the [CONTRIBUTING.md](CONTRIBUTING.md).
+
+
+
+DM SIDE:
+
+Toolbar: On the left side of the screen is the toolbar which gives access to tools for manipulating the map.
+Move: Allows for clicking and dragging to move the map around
+Brush: Depending on if reveal or shroud is activated, allows you to draw to add or remove fog of war (you can edit size and shape of brush).
+Area: Depending on if reveal or shroud is activated, allows you to click and drag an area to add or remove fog of war.
+Mark: Allows you to ping where you click to point something out to the players.
+Token: Allows you to edit the properties of a token (size, color, label, counter)
+Reveal / Shroud: When reveal is selected, other buttons will remove fog, when shroud is selected, other buttons will add fog.
+Shroud All / Clear All: They shroud the map completely in fog or remove all fog from the map respectively.
+
+Tokens: Tokens placeable entities on the map with editable properties.
+ Position: The location of the token on the map, can be changed with specific X/Y coordinates or freely moved.
+Size: The size of the token.
+Rotation: Rotates the token.
+Position locked: Makes the token not freely movable, can still change X/Y coordinates.
+Title: Displays the name of the token.
+Color: Changes the color of the token.
+Visible to players: If on, players can see the token, if off, players can’t see the token.
+Moveable by players: If on, players can move the token, if off, players cannot move the token.
+Reference: Allows you to link a  DM note to the token.
+Image: Allows you to add an image to the token.
+
+Grid: This button allows a grid to be added on top of the map, it can be adjusted to fit the desired size.
+
+Map Library: This opens up the map library which contains all maps the DM has.
+Map List: Displays all the maps the DM has, you can select a map here and a preview of it will show on the right.
+Create New Map: This creates a blank map, it will ask for the upload of an image (png, jpg, jpeg, svg), and a name for the map.
+Create New Scenario: This creates a “full” map with tokens and fog already in place, it will ask for the upload of 4 files, (settings.json, map image, fog.live.png, fog.progress.png) and a name for the map.
+Default Scenario Folder: Contains a list of default scenarios, prepared maps with tokens and fog.
+Map List: A list of all default maps
+Add New Default Scenario: A button to upload default scenarios, will ask for the upload of 4 files (settings.json, map image, fog.live.png, fog.progress.png).
+Delete: Delete the selected scenario
+Load Scenario: Loads the default scenario into the map library
+Filter: A way to search the map list for specific maps.
+Delete: Deletes the current selected map.
+Load Map: After a map is selected from the list, this loads the map as the active map.
+
+View & Download Session: Allows you to view all saved sessions and possibly retrieve zoom data, view the data, and download it.
+View:  
+Iterations: Shows the current state of the map after each iteration.
+Movement Graph: Shows the path all tokens took throughout the session.
+Herd Graph: A graph that displays the distance relationship between all tokens, you can select which tokens to display using the left sidebar. Also displays the center point of selected tokens, this can be toggled. 
+Whiteboard Iterations: Snapshots of the whiteboard that were collected (1 minute intervals).
+Zoom: After adding all required information, and selecting the desired recording and transcript, it will be added to the session folder and able to be downloaded. There is also a button that takes the DM to their zoom page to simplify the process.
+Download: Will download the session and all its data to your computer.
+
+Save Session: Will save the session under the selected name and allows you to view it in the “View & Download Session” button.
+
+Drawing: This opens up the whiteboard so you can view what the players are drawing.
+Share button: Clicking this will share it with all participants, allowing live collaboration.
+
+Notes: DM notes that all players can see. 
+
+Stop Sharing: Stops showing the map to the players.
+
+Not live/ Live: Shows whether or not the players can see the map.
+
+Send: Sends the current state of the map to the players, if fog is changed for example, you must hit send to update the players view.
+
+Start Recording: Begins the collection of data on the map, when a player moves a token or a change takes place, it will save an iteration. It must be live and recording for it to actually record.
+
+Clear Session: Clears the current recording, after hitting this button, you can start recording fresh again.
+
+
+PLAYER SIDE:
+
+Center Map: This centers the map for the player.
+
+Zoom In/ Zoom Out: Zooms into the map or out of the map respectively.
+
+Measure Distance: When on, clicking and holding 2 locations will display their distance on the top of the screen, if a grid is on, distance is calculated based off of that, if grid is off its based on pixels.
+
+Player Notes: Personal notes for the player, allows them to keep track of whatever they need, this will be saved and available after data is downloaded.
+
+Dm Notes: Allows players to view the DM notes.
+
+Drawing: Opens up the whiteboard, if a player hits share, it will also share to everyone.
+
+Tokens: Players can move tokens if the DM has allowed them to, same with visibility.
+
+Fog of war: Players cannot see parts of the map covered in fog of war.
+
+
+CHAT AND OTHERS:
+
+Right-side panel: At the top right, clicking the chat bubble icon, will open or close the right-side panel.
+Chat: Allows for players and DM to communicate through text.
+Users: Shows all the players currently connected.
+Settings: Allows for users to change their display name and toggle sound.
+
+
+
