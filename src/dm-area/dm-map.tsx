@@ -709,7 +709,6 @@ const DownloadModal: React.FC<ModalProps> = ({
           <p>No sessions available to view or download</p>
         ) : (
           <>
-            {/* New button to open the ZoomModal */}
             <div style={{ marginTop: "16px", textAlign: "center" }}>
               <button
                 onClick={() => window.open("https://zoom.com/signin", "_blank")}
@@ -726,22 +725,6 @@ const DownloadModal: React.FC<ModalProps> = ({
                 Open Zoom
               </button>
             </div>
-            {/* Conditionally render the ZoomModal
-            {showZoomFileSelector && (
-              <ZoomFileSelectorModal
-                onClose={() => setShowZoomFileSelector(false)}
-                onFilesSelected={(files) => {
-                  // Save the selected filenames in state
-                  setZoomFiles(files);
-                }}
-              />
-            )}
-            {isZoomModalVisible && (
-              <ZoomModal
-                onClose={closeZoomModal}
-                onDownloadComplete={handleZoomDownloadComplete}
-              />
-            )} */}
             <p>Select a session to download:</p>
             <div style={listContainerStyle}>
               <ul style={{ padding: 0, listStyle: "none" }}>
@@ -754,6 +737,25 @@ const DownloadModal: React.FC<ModalProps> = ({
                     >
                       View
                     </button>
+                    <button style={smallButtonStyle} onClick={openZoomModal}>
+                      Zoom
+                    </button>
+                    {/* Conditionally render the ZoomModal */}
+                    {showZoomFileSelector && (
+                      <ZoomFileSelectorModal
+                        onClose={() => setShowZoomFileSelector(false)}
+                        onFilesSelected={(files) => {
+                          // Save the selected filenames in state
+                          setZoomFiles(files);
+                        }}
+                      />
+                    )}
+                    {isZoomModalVisible && (
+                      <ZoomModal
+                        onClose={closeZoomModal}
+                        onDownloadComplete={handleZoomDownloadComplete}
+                      />
+                    )}
                     <button
                       style={smallButtonStyle}
                       onClick={() => handleDownloadClick(session)}
@@ -2487,45 +2489,53 @@ const ZoomFileSelectorModal: React.FC<ZoomFileSelectorModalProps> = ({
         {files.length === 0 ? (
           <p>No Zoom files found.</p>
         ) : (
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {files.map((file) => {
-              // If it ends with .vtt, append a label
-              const isTranscript = file.toLowerCase().endsWith(".vtt");
-              const displayName = isTranscript
-                ? `${file} (Audio transcript)`
-                : file;
+          <div
+            style={{
+              maxHeight: "300px", // or another max height value
+              overflowY: "auto",
+              marginBottom: "10px",
+            }}
+          >
+            <ul style={{ listStyle: "none", padding: 0 }}>
+              {files.map((file) => {
+                // If it ends with .vtt, append a label
+                const isTranscript = file.toLowerCase().endsWith(".vtt");
+                const displayName = isTranscript
+                  ? `${file} (Audio transcript)`
+                  : file;
 
-              return (
-                <li
-                  key={file}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    marginBottom: "12px",
-                    padding: "8px",
-                    borderBottom: "1px solid #ddd",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(file)}
-                    onChange={() => handleCheckboxChange(file)}
-                    style={{ marginRight: "8px" }}
-                  />
-                  <span
+                return (
+                  <li
+                    key={file}
                     style={{
-                      marginLeft: "6px",
-                      whiteSpace: "nowrap", // Force file name on one line
-                      overflow: "hidden",
-                      textOverflow: "ellipsis", // Optionally truncate if too long
+                      display: "flex",
+                      alignItems: "center",
+                      marginBottom: "12px",
+                      padding: "8px",
+                      borderBottom: "1px solid #ddd",
                     }}
                   >
-                    {displayName}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(file)}
+                      onChange={() => handleCheckboxChange(file)}
+                      style={{ marginRight: "8px" }}
+                    />
+                    <span
+                      style={{
+                        marginLeft: "6px",
+                        whiteSpace: "nowrap", // Force file name on one line
+                        overflow: "hidden",
+                        textOverflow: "ellipsis", // Optionally truncate if too long
+                      }}
+                    >
+                      {displayName}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
         <div style={{ marginTop: "20px", textAlign: "right" }}>
           <button
