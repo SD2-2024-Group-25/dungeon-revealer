@@ -1539,7 +1539,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
                     DM View
                   </button>
                 </div>
-                <div style={{ display: "flex" }}>
+                {/*}   <div style={{ display: "flex" }}>
                   <button
                     style={{
                       ...(showGrid ? inactiveSegmentStyle : activeSegmentStyle),
@@ -1572,7 +1572,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
                   >
                     Grid On
                   </button>
-                </div>
+                </div> */}
 
                 <div
                   style={{
