@@ -1052,6 +1052,25 @@ export const Camera = createIcon({
   ),
 });
 
+export const CameraRecord = createIcon({
+  displayName: "CameraRecord",
+  viewBox: "0 0 24 24",
+  defaultProps: {
+    fill: "none",
+    stroke: "#000000",
+    strokeWidth: 2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+  },
+  path: (
+    <>
+      <polygon points="23 7 16 12 23 17 23 7" />
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+      <circle cx="8.5" cy="12" r="2" fill="red" />
+    </>
+  ),
+});
+
 export const DownloadCloud = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"

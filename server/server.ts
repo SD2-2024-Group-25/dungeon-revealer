@@ -258,18 +258,19 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   });
 
+  /*
   //retrieves map file for a specific iteration
   apiRouter.get(
     "/iteration/:sessionName/:iterationName/:map",
     async (req, res) => {
-      const { sessionName, iterationName } = req.params;
+      const { sessionName, iterationName, map } = req.params;
 
       const mapFilePath = path.join(
         researchPath,
         "saved",
         sessionName,
         iterationName,
-        "map.png"
+        map
       );
 
       if (!fs.existsSync(mapFilePath)) {
@@ -278,6 +279,62 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       }
 
       res.sendFile(mapFilePath);
+    }
+  );
+  */
+
+  //retrieves map file for a specific iteration
+  apiRouter.get("/iteration/:sessionName/:iterationName", async (req, res) => {
+    const { sessionName, iterationName } = req.params;
+
+    const fileExtensions = ["jpg", "jpeg", "svg", "png"];
+    let mapFilePath = null;
+
+    for (const ext of fileExtensions) {
+      const possibleMapPath = path.join(
+        researchPath,
+        "saved",
+        sessionName,
+        iterationName,
+        `map.${ext}`
+      );
+      console.log("Checking:", possibleMapPath);
+      if (fs.existsSync(possibleMapPath)) {
+        mapFilePath = possibleMapPath;
+        break;
+      }
+    }
+
+    if (!mapFilePath) {
+      console.error(
+        "Map file not found for session:",
+        sessionName,
+        iterationName
+      );
+      return res.status(404).json({ error: "Map file not found " });
+    }
+    res.sendFile(mapFilePath);
+  });
+
+  //retrieves fog progress and fog live file for a specific iteration
+  apiRouter.get(
+    "/iteration/:sessionName/:iterationName/:fileName",
+    async (req, res) => {
+      const { sessionName, iterationName, fileName } = req.params;
+      const filePath = path.join(
+        researchPath,
+        "saved",
+        sessionName,
+        iterationName,
+        fileName
+      );
+
+      console.log("Checking fog file:", filePath);
+      if (!fs.existsSync(filePath)) {
+        console.error("File not found:", filePath);
+        return res.status(404).json({ error: `${fileName} not found` });
+      }
+      res.sendFile(filePath);
     }
   );
 
@@ -299,6 +356,27 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     }
   );
 
+  app.post("/api/clear-session", (req, res) => {
+    const sourceSessionFolder = path.join(researchPath, "downloads", "session");
+    const sourceZoomFolder = path.join(researchPath, "downloads", "zoom");
+    const sourceNotesFolder = path.join(researchPath, "notes");
+    const sourceWhiteboardFolder = path.join(researchPath, "whiteboard");
+    const selectedZoomFolder = path.join(researchPath, "zoom");
+
+    try {
+      deleteFolderContents(sourceSessionFolder);
+      deleteFolderContents(sourceNotesFolder);
+      deleteFolderContents(sourceWhiteboardFolder);
+      deleteFolderContents(selectedZoomFolder);
+      deleteFolderContents(sourceZoomFolder);
+
+      res.status(200).json({ message: "Session cleared" });
+    } catch (error) {
+      console.error("Error clearing session:", error);
+      res.status(500).json({ error: "Failed to clear session" });
+    }
+  });
+
   app.post("/api/recording", (req, res) => {
     const filePath = path.join(researchPath, "settings.json");
 
@@ -317,7 +395,6 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       const updatedState =
         jsonData.recording === "recording" ? "stopped" : "recording";
       jsonData.recording = updatedState;
-      console.log("Updated recording state:", updatedState);
 
       fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), (err) => {
         if (err) {
@@ -429,7 +506,6 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
   apiRouter.post("/save-session/:folderName", (req, res) => {
     const name = req.params.folderName;
-    // const { zoomFiles } = req.body;
     console.log(name);
 
     if (!name || name.trim() === "") {
@@ -457,6 +533,7 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
     const destinationFolder = path.join(savedPath, finalFolderName);
     const sourceSessionFolder = path.join(researchPath, "downloads", "session");
+    const sourceZoomFolder = path.join(researchPath, "downloads", "zoom");
     const sourceNotesFolder = path.join(researchPath, "notes");
     const destinationNotesFolder = path.join(destinationFolder, "notes");
     const sourceWhiteboardFolder = path.join(researchPath, "whiteboard");
@@ -464,8 +541,8 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
       destinationFolder,
       "whiteboard"
     );
-    const sourceZoomFolder = path.join(researchPath, "zoom");
-    const destinationZoomFolder = path.join(destinationFolder, "zoom");
+    const selectedZoomFolder = path.join(researchPath, "zoom");
+    const destinationZoomFolder = path.join(destinationFolder, "zoom_data");
 
     try {
       if (!fs.existsSync(sourceSessionFolder)) {
@@ -484,11 +561,12 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
 
       copyFolderRecursive(sourceNotesFolder, destinationNotesFolder);
       copyFolderRecursive(sourceWhiteboardFolder, destinationWhiteboardFolder);
-      copyFolderRecursive(sourceZoomFolder, destinationZoomFolder);
+      copyFolderRecursive(selectedZoomFolder, destinationZoomFolder);
 
       deleteFolderContents(sourceSessionFolder);
       deleteFolderContents(sourceNotesFolder);
       deleteFolderContents(sourceWhiteboardFolder);
+      deleteFolderContents(selectedZoomFolder);
       deleteFolderContents(sourceZoomFolder);
 
       console.log(`Session saved: ${finalFolderName}`);
@@ -789,6 +867,11 @@ export const bootstrapServer = async (env: ReturnType<typeof getEnv>) => {
     socketSessionStore.set(socket, {
       id: socket.id,
       role: "unauthenticated",
+    });
+
+    socket.on("update-recording-status", (data) => {
+      // Broadcast to everyone *except* the sender (DM)
+      socket.broadcast.emit("update-recording-status", data);
     });
 
     socket.on("authenticate", ({ password, desiredRole }) => {

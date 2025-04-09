@@ -30,6 +30,8 @@ router.post("/download", async (req, res) => {
     );
     fs.ensureDirSync(downloadPath);
 
+    deleteFolderContents(downloadPath);
+
     // Call your script
     const result = await downloadZoomRecordings({
       accountId,
@@ -84,7 +86,7 @@ router.get("/list-files", async (req, res) => {
 // 2) POST /api/zoom/copy-files
 router.post("/copy-files", async (req, res) => {
   try {
-    const { selectedFiles } = req.body;
+    const { selectedFiles, session } = req.body;
     if (!selectedFiles || !Array.isArray(selectedFiles)) {
       return res.status(400).json({ error: "No selected files provided" });
     }
@@ -108,7 +110,9 @@ router.post("/copy-files", async (req, res) => {
       "..",
       "public",
       "research",
-      "zoom"
+      "saved",
+      session,
+      "zoom_data"
     );
     // const finalSavedDir = path.join(
     //   __dirname,
@@ -122,7 +126,6 @@ router.post("/copy-files", async (req, res) => {
     // Ensure directories exist
     fs.ensureDirSync(finalZoomDir);
     // fs.ensureDirSync(finalSavedDir);
-
     // Copy each selected file
     for (const fileName of selectedFiles) {
       const srcPath = path.join(zoomDir, fileName);
@@ -142,5 +145,18 @@ router.post("/copy-files", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+function deleteFolderContents(folderPath: any) {
+  if (fs.existsSync(folderPath)) {
+    fs.readdirSync(folderPath).forEach((file) => {
+      const curPath = path.join(folderPath, file);
+      if (fs.lstatSync(curPath).isDirectory()) {
+        fs.rmSync(curPath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(curPath);
+      }
+    });
+  }
+}
 
 export default router;
