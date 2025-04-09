@@ -19,6 +19,7 @@ COPY . .
 RUN echo "===== Checking patches folder =====" \
  && ls -l patches || echo "No patches folder found"
 
+
 # 5. Explicitly run patch-package to ensure patches are applied
 #    was not working without this
 RUN npm run patch-package
@@ -34,6 +35,9 @@ ARG VITE_EXCALIDRAW_URL
 ENV VITE_EXCALIDRAW_URL=$VITE_EXCALIDRAW_URL
 # 7. Build the app
 RUN npm run build
+
+# Add default settings.json
+RUN mkdir -p ./data && echo '{ "currentMapId": "" }' > ./data/settings.json
 
 # 8. Expose and run
 EXPOSE 3000
