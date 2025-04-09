@@ -1836,6 +1836,7 @@ const MovementGraphModal: React.FC<MovementGraphModalProps> = ({
 
   // Grab the background image
   React.useEffect(() => {
+    //
     if (show && sessionName) {
       const fetchImage = async () => {
         try {
@@ -2593,7 +2594,7 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Gets the whiteboard images from the session
+  // Fetch whiteboard images from the session
   React.useEffect(() => {
     if (sessionName) {
       setLoading(true);
@@ -2607,17 +2608,15 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
           if (!response.ok) {
             throw new Error("Failed to fetch whiteboard images");
           }
-
           const data = await response.json();
           setImages(data.images || []);
-
           if (data.images && data.images.length > 0) {
             setSelectedImage(data.images[0]);
           } else {
             setSelectedImage("");
           }
-        } catch (error) {
-          console.error("Error fetching whiteboard images:", error);
+        } catch (err) {
+          console.error("Error fetching whiteboard images:", err);
           setError("Error fetching images");
         } finally {
           setLoading(false);
@@ -2629,14 +2628,26 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
 
   if (!show) return null;
 
-  const imageUrl =
-    sessionName && selectedImage
-      ? `/research/saved/${sessionName}/whiteboard/${selectedImage}`
-      : "";
+  const imageUrl = sessionName && selectedImage ? selectedImage : "";
+  const displayName = selectedImage ? selectedImage.split("/").pop() : "";
+
+  const Prev = () => {
+    const currentIndex = images.findIndex((img) => img === selectedImage);
+    if (currentIndex > 0) {
+      setSelectedImage(images[currentIndex - 1]);
+    }
+  };
+
+  const Next = () => {
+    const currentIndex = images.findIndex((img) => img === selectedImage);
+    if (currentIndex < images.length - 1) {
+      setSelectedImage(images[currentIndex + 1]);
+    }
+  };
 
   return (
     <div style={whiteboardModalOverlayStyle}>
-      <div style={whiteboardModalStyle}>
+      <div style={{ ...whiteboardModalStyle, position: "relative" }}>
         <div style={{ display: "flex", height: "calc(100% - 40px)" }}>
           {/* Left Sidebar */}
           <div
@@ -2653,17 +2664,20 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
               <p>{error}</p>
             ) : (
               <ul style={{ listStyle: "none", padding: 10, margin: 0 }}>
-                {images.map((img) => (
-                  <li
-                    key={img}
-                    style={{ ...whiteboardImgStyle, cursor: "pointer" }}
-                    onClick={() => {
-                      setSelectedImage(img);
-                    }}
-                  >
-                    {img}
-                  </li>
-                ))}
+                {images.map((img) => {
+                  const fileName = img.split("/").pop();
+                  return (
+                    <li
+                      key={img}
+                      style={{ ...whiteboardImgStyle, cursor: "pointer" }}
+                      onClick={() => {
+                        setSelectedImage(img);
+                      }}
+                    >
+                      {fileName}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -2683,8 +2697,62 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
                 <h2>{sessionName}</h2>
                 {selectedImage ? (
                   <>
-                    <h3>{selectedImage}</h3>
-                    <img src={imageUrl} alt={selectedImage} style={imgStyle} />
+                    <h3>{displayName}</h3>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        marginTop: "10px",
+                        zIndex: 10,
+                      }}
+                    >
+                      <button
+                        onClick={Prev}
+                        disabled={
+                          images.findIndex((img) => img === selectedImage) <= 0
+                        }
+                        style={{
+                          border: "2px solid #ccc",
+                          padding: "3px",
+                        }}
+                      >
+                        Prev
+                      </button>
+                      <button
+                        onClick={Next}
+                        disabled={
+                          images.findIndex((img) => img === selectedImage) ===
+                          images.length - 1
+                        }
+                        style={{
+                          border: "2px solid #ccc",
+                          padding: "3px",
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                    <div
+                      style={{
+                        marginTop: "50px",
+                        width: "100%",
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        maxHeight: "calc(80vh - 150px)",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <img
+                        src={imageUrl}
+                        alt={displayName}
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          objectFit: "contain",
+                        }}
+                      />
+                    </div>
                   </>
                 ) : (
                   <p>Please select a whiteboard image</p>
@@ -2695,7 +2763,6 @@ const WhiteboardModal: React.FC<MovementGraphModalProps> = ({
             )}
           </div>
         </div>
-
         <button onClick={onClose} style={whiteboardCloseButtonStyle}>
           Close
         </button>
