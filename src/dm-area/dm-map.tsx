@@ -871,6 +871,23 @@ const ViewModal: React.FC<ViewModalProps> = ({
   }>({ width: 800, height: 600 });
   const [playerView, setPlayerView] = React.useState<boolean>(true);
   const [showDownloadModal, setShowDownloadModal] = React.useState(false);
+  const [selectedToken, setSelectedToken] = React.useState<{
+    label?: string;
+    x?: number;
+    y?: number;
+    radius?: number;
+  } | null>(null);
+
+  const offsetRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const tokensRef = React.useRef<any[]>([]);
+
+  const ratioRef = React.useRef<number>(1);
+
+  //const sidebarRef = React.useRef(null);
+  const sidebarRef = React.useRef<HTMLDivElement>(null);
+
+  const [scrollbarWidth, setScrollbarWidth] = React.useState(0);
 
   const goToPreviousIteration = () => {
     if (selectedIteration) {
@@ -972,8 +989,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
           const settings = await settingsResponse.json();
           console.log("Fetched settings:", settings);
 
-          //const dynamicMapName = settings.mapPath || "map.jpg";
-          //const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}/${dynamicMapName}`;
           const mapImageUrl = `/api/iteration/${sessionName}/${selectedIteration}`;
           console.log("Loading map image from:", mapImageUrl);
 
@@ -983,22 +998,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
           mapImage.onload = async () => {
             let imgWidth = mapImage.naturalWidth;
             let imgHeight = mapImage.naturalHeight;
-
-            if (
-              mapImage.src.toLowerCase().endsWith(".svg") &&
-              (!imgWidth || !imgHeight)
-            ) {
-              const dimensions = await getSvgDimensions(mapImage.src);
-              imgWidth = dimensions.width;
-              imgHeight = dimensions.height;
-            }
-
-            /*
-            if (imgWidth > 800 || imgHeight > 600) {
-              const scale = Math.min(800 / imgWidth, 600 / imgHeight);
-              imgWidth = Math.floor(imgWidth * scale);
-              imgHeight = Math.floor(imgHeight * scale);
-            }*/
 
             //Optimal dimensions for the grid
             const optimal = getOptimalDimensions(imgWidth, imgHeight, 800, 600);
@@ -1023,15 +1022,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
             //clears the canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (
-              mapImage.src.toLowerCase().endsWith(".svg") &&
-              (!imgWidth || !imgHeight)
-            ) {
-              const dimensions = await getSvgDimensions(mapImage.src);
-              imgWidth = dimensions.width;
-              imgHeight = dimensions.height;
-            }
-
             const scale = Math.min(
               canvas.width / imgWidth,
               canvas.height / imgHeight
@@ -1044,11 +1034,12 @@ const ViewModal: React.FC<ViewModalProps> = ({
             const offsetX = (canvas.width - drawWidth) / 2;
             const offsetY = (canvas.height - drawHeight) / 2;
 
+            offsetRef.current = { x: offsetX, y: offsetY };
+
             //save the current context state
             ctx.save();
             //translate and scale the canvas so that drawing operations use the iamges original coordinate system
             ctx.translate(offsetX, offsetY);
-            //ctx.scale(scale, scale);
 
             //drawing the base map image at its original dimensions
             ctx.drawImage(mapImage, 0, 0, imgWidth, imgHeight);
@@ -1064,7 +1055,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
                 img.src = url;
               });
 
-            //construct fog image urls
             const fogLiveUrl = `${mapImageUrl}/fog.live.png`;
             const fogProgressUrl = `${mapImageUrl}/fog.progress.png`;
             let fogLiveImg: HTMLImageElement | null = null;
@@ -1083,7 +1073,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
             }
 
             if (playerView) {
-              //Draw fog layers
               if (fogLiveImg) {
                 ctx.drawImage(fogLiveImg, 0, 0, imgWidth, imgHeight);
                 console.log("Fog live layer drawn");
@@ -1100,10 +1089,8 @@ const ViewModal: React.FC<ViewModalProps> = ({
               }
             }
 
-            //just for the grid!!!
-
             if (showGrid) {
-              //drawing a grid overlay using the original coordinates
+              ctx.save();
               const ratio = optimal.ratio;
 
               const scaledOffsetX = (map.grid?.offsetX ?? 0) * ratio;
@@ -1114,7 +1101,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
               ctx.strokeStyle = "rgb(0, 0, 0)";
               ctx.lineWidth = 1;
 
-              //for(let x = scaledOffsetX; x <= scaledOffsetX + mapImage.naturalWidth; x += colW){
               for (
                 let x = scaledOffsetX;
                 x <= scaledOffsetX + canvas.width;
@@ -1126,7 +1112,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
                 ctx.stroke();
               }
 
-              //for(let y = scaledOffsetY; y <= scaledOffsetY + mapImage.naturalWidth; y += colH){
               for (
                 let y = scaledOffsetY;
                 y <= scaledOffsetY + canvas.height;
@@ -1138,22 +1123,11 @@ const ViewModal: React.FC<ViewModalProps> = ({
                 ctx.stroke();
               }
 
-              /*const gridSpacing = 50;
-              ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
-              ctx.lineWidth = 1;
-              for (let x = 0; x <= mapImage.naturalWidth; x += gridSpacing) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, mapImage.naturalHeight);
-                ctx.stroke();
-              }
-              for (let y = 0; y <= mapImage.naturalHeight; y += gridSpacing) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(mapImage.naturalWidth, y);
-                ctx.stroke();
-              }*/
+              ctx.restore();
             }
+
+            ratioRef.current = optimal.ratio;
+            tokensRef.current = [];
 
             if (settings.tokens && Array.isArray(settings.tokens)) {
               settings.tokens.forEach((token: any) => {
@@ -1191,6 +1165,9 @@ const ViewModal: React.FC<ViewModalProps> = ({
                     }
 
                     const tokenImage = new Image();
+
+                    tokensRef.current.push(token);
+
                     //circle for token is created
                     ctx.beginPath();
                     ctx.arc(
@@ -1206,6 +1183,8 @@ const ViewModal: React.FC<ViewModalProps> = ({
                   }
                   //if the token doesnt contain an image draw circle only
                   else {
+                    tokensRef.current.push(token);
+
                     ctx.beginPath();
                     ctx.arc(
                       token.x * optimal.ratio,
@@ -1230,6 +1209,29 @@ const ViewModal: React.FC<ViewModalProps> = ({
                         token.y * optimal.ratio
                       );
                     }
+
+                    console.count("drawMapWithTokens called");
+                  }
+                  console.log("current token.label:", token.label);
+
+                  if (
+                    selectedToken &&
+                    selectedToken.x === token.x &&
+                    selectedToken.y === token.y &&
+                    selectedToken.radius === token.radius
+                  ) {
+                    ctx.beginPath();
+                    ctx.arc(
+                      token.x * optimal.ratio,
+                      token.y * optimal.ratio,
+                      token.radius * optimal.ratio - 3,
+                      0,
+                      2 * Math.PI
+                    );
+                    ctx.strokeStyle = "yellow";
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    ctx.closePath();
                   }
                 }
               });
@@ -1248,160 +1250,146 @@ const ViewModal: React.FC<ViewModalProps> = ({
       };
       drawMapWithTokens();
     }
-  }, [show, selectedIteration, sessionName, showGrid, playerView]);
+  }, [
+    show,
+    selectedIteration,
+    sessionName,
+    showGrid,
+    playerView,
+    selectedToken,
+  ]);
+
+  React.useEffect(() => {
+    if (!show) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    function handleCanvasClick(ev: MouseEvent) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      //retrieving the size of the canvas as its been rendered on the page- this could be different values depending on screen size.
+      const rect = canvas.getBoundingClientRect();
+
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const clickX = (ev.clientX - rect.left) * scaleX;
+      const clickY = (ev.clientY - rect.top) * scaleY;
+
+      const mapX = clickX - offsetRef.current.x;
+      const mapY = clickY - offsetRef.current.y;
+
+      const rRatio = ratioRef.current;
+
+      for (const token of tokensRef.current) {
+        const centerX = token.x * rRatio;
+        const centerY = token.y * rRatio;
+        const r = token.radius * rRatio;
+
+        const dist = Math.hypot(mapX - centerX, mapY - centerY);
+        if (dist <= r) {
+          setSelectedToken({
+            label: token.label,
+            x: token.x,
+            y: token.y,
+            radius: token.radius,
+          });
+          break;
+        }
+      }
+    }
+
+    canvas.addEventListener("click", handleCanvasClick);
+    return () => {
+      canvas.removeEventListener("click", handleCanvasClick);
+    };
+  }, [show, canvasSize]);
+
+  React.useEffect(() => {
+    if (sidebarRef.current) {
+      const sb = sidebarRef.current;
+      const computedScrollbarWidth = sb.offsetWidth - sb.clientWidth;
+      setScrollbarWidth(computedScrollbarWidth);
+    }
+  }, [isSidebarOpen, loading, sessions, iterations]);
 
   if (!show) return null;
 
   return (
     <div style={viewModalOverlayStyle}>
       <div style={viewModalStyle}>
-        {/* Button that takes you to the previous page */}
-        <button
-          style={{
-            position: "absolute",
-            right: "97%",
-            top: "20px",
-            cursor: "pointer",
-            background: "none",
-            border: "none",
-            //padding: "5px",
-          }}
-          onClick={() => {
-            setPlayerView(true);
-            setShowGrid(false);
-            onOpenDownload();
-          }}
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ display: "block" }}
+        {/* Div for back and close button */}
+        <div style={{ position: "absolute", top: "20px", left: 0, right: 0 }}>
+          <button
+            style={{
+              position: "absolute",
+              left: "1%",
+              cursor: "pointer",
+              background: "none",
+              border: "none",
+            }}
+            onClick={() => {
+              setPlayerView(true);
+              setShowGrid(false);
+              onOpenDownload();
+              setSelectedToken(null);
+              setSelectedIteration(null);
+            }}
           >
-            <line x1="19" y1="12" x2="5" y2="12"></line>
-            <polyline points="12 19 5 12 12 5"></polyline>
-          </svg>
-        </button>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ display: "block" }}
+            >
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+          </button>
 
-        {/* Button that closes the view modal */}
-        <button
-          style={{
-            position: "absolute",
-            left: "97%",
-            top: "10px",
-            cursor: "pointer",
-            //padding: "5px",
-          }}
-          onClick={() => {
-            onClose();
-            setPlayerView(true);
-            setShowGrid(false);
-          }}
-        >
-          <span style={{ marginRight: "5px", fontSize: "30px" }}>&times;</span>
-        </button>
+          {/* Button that closes the view modal */}
 
-        {/* Button that opens the movement graph */}
-        <button
-          onClick={() => setShowMovementModal(true)}
-          style={{
-            position: "absolute",
-            //left: "85%",
-            right: "15px",
-            top: "50px",
-            cursor: "pointer",
-            //border: "2px solid #ccc",
-            padding: "5px",
-            /*   position: "absolute",
-            left: "85%",
-            top: "10px",
-            cursor: "pointer",
-            border: "2px solid #ccc",
-            padding: "5px",*/
-          }}
-        >
-          Open Movement Graph
-        </button>
+          <button
+            style={{
+              position: "absolute",
+              right: "1%",
+              cursor: "pointer",
+              zIndex: 10,
+              lineHeight: "20px",
+            }}
+            onClick={() => {
+              onClose();
+              setPlayerView(true);
+              setShowGrid(false);
+              setSelectedToken(null);
+              setSelectedIteration(null);
+            }}
+          >
+            <span style={{ fontSize: "30px" }}>&times;</span>
+          </button>
+        </div>
 
-        {/* Button that opens herd graph */}
-        <button
-          onClick={() => setShowHerdModal(true)}
-          style={{
-            position: "absolute",
-            right: "15px",
-            top: "90px",
-            cursor: "pointer",
-            //border: "2px solid #ccc",
-            padding: "5px",
-
-            /*  position: "absolute",
-            left: "85%",
-            top: "50px",
-            cursor: "pointer",
-            border: "2px solid #ccc",
-            padding: "5px", */
-          }}
-        >
-          Open Herd Graph
-        </button>
-
-        {/* Button that opens the whiteboard iterations */}
-        <button
-          onClick={() => setShowWhiteboardModal(true)}
-          style={{
-            position: "absolute",
-            //left: "85%",
-            right: "15px",
-            top: "130px",
-            //top: "90px",
-            cursor: "pointer",
-            //border: "2px solid #ccc",
-            padding: "5px",
-          }}
-        >
-          Open Whiteboard Iterations
-        </button>
-
-        {/* A button to toggle the sidebar */}
-        <button
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          style={{
-            position: "absolute",
-            left: isSidebarOpen ? "225px" : "10px",
-            cursor: "pointer",
-            overflow: "hidden",
-            transition: "width 0.3s ease",
-          }}
-        >
-          {isSidebarOpen ? (
-            <span style={{ marginRight: "5px", fontSize: "30px" }}>
-              &#8249;
-            </span>
-          ) : (
-            <span style={{ marginRight: "5px", fontSize: "30px" }}>
-              &#8250;
-            </span>
-          )}
-          {/*isSidebarOpen ? "Close" : "Open"*/}
-        </button>
-
-        {/* div for left sidebar and right panel */}
+        {/* Div for left sidebar and right panel */}
         <div style={{ display: "flex", height: "100%" }}>
           {/* Left Sidebar */}
           {isSidebarOpen && (
             <div
+              ref={sidebarRef}
               style={{
-                width: "200px",
+                width: "13vw",
                 borderRight: "1px solid #ccc",
                 overflowY: "auto",
                 padding: "10px",
               }}
             >
+              {/*<h3 style={{ margin: "0 0 10px 0" }}>Action Snapshots</h3>*/}
+
               {loading ? (
                 <p>Loading...</p>
               ) : error ? (
@@ -1428,11 +1416,22 @@ const ViewModal: React.FC<ViewModalProps> = ({
                 <p>No iterations available</p>
               ) : (
                 <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                  {iterations.map((iteration) => (
+                  {iterations.map((iteration, index) => (
                     <li key={iteration} style={sessionItemStyle}>
                       <button
-                        style={smallButtonStyle}
-                        onClick={() => setSelectedIteration(iteration)}
+                        style={{
+                          ...smallButtonStyle,
+                          backgroundColor: "transparent",
+                          borderLeft:
+                            iteration === selectedIteration
+                              ? "4px solid #74c69d"
+                              : "none",
+                          textAlign: "left",
+                        }}
+                        onClick={() => {
+                          setSelectedIteration(iteration);
+                          setSelectedToken(null);
+                        }}
                       >
                         {iteration}
                       </button>
@@ -1443,25 +1442,198 @@ const ViewModal: React.FC<ViewModalProps> = ({
             </div>
           )}
 
-          {/* HERE */}
+          {/* Div for putting player/dm view panel, map panel, and movement graph panel in a row */}
           <div
             style={{
+              position: "relative",
               display: "flex",
               flex: 1,
               flexDirection: "row",
               alignItems: "center",
+              justifyContent: "space-evenly",
             }}
           >
-            {/* Main Panel */}
+            {/* Div for side bar button and player view button in a row */}
             <div
               style={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+            >
+              {/* A button to toggle the sidebar */}
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+
+                  left: isSidebarOpen ? "2px" : "2px",
+                  padding: "8px",
+                  zIndex: 20,
+                  cursor: "pointer",
+                  overflow: "hidden",
+                  transition: "width 0.3s ease",
+                }}
+              >
+                {isSidebarOpen ? (
+                  <span style={{ marginRight: "5px", fontSize: "30px" }}>
+                    &#8249;
+                  </span>
+                ) : (
+                  <span style={{ marginRight: "5px", fontSize: "30px" }}>
+                    &#8250;
+                  </span>
+                )}
+              </button>
+
+              {/* Column 1: Div for player/dm view, grid off/on buttons, and token selection popup */}
+              <div
+                style={{
+                  marginLeft: "60px",
+                  marginTop: "20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "12px",
+                  zIndex: 10,
+                }}
+              >
+                <div style={{ display: "flex" }}>
+                  <button
+                    style={{
+                      ...(playerView
+                        ? activeSegmentStyle
+                        : inactiveSegmentStyle),
+                      flexGrow: "1",
+
+                      minWidth: "100px",
+                      maxHeight: "40px",
+                      borderLeft: "2px solid #ccc",
+                      borderTop: "2px solid #ccc",
+                      borderBottom: "2px solid #ccc",
+                      borderTopLeftRadius: "10px",
+                      borderBottomLeftRadius: "10px",
+                    }}
+                    onClick={() => setPlayerView(true)}
+                  >
+                    Player View
+                  </button>
+                  <button
+                    style={{
+                      ...(playerView
+                        ? inactiveSegmentStyle
+                        : activeSegmentStyle),
+                      flexGrow: "1",
+                      minWidth: "100px",
+                      maxHeight: "40px",
+                      borderRight: "2px solid #ccc",
+                      borderTop: "2px solid #ccc",
+                      borderBottom: "2px solid #ccc",
+                      borderTopRightRadius: "10px",
+                      borderBottomRightRadius: "10px",
+                    }}
+                    onClick={() => setPlayerView(false)}
+                  >
+                    DM View
+                  </button>
+                </div>
+                <div style={{ display: "flex" }}>
+                  <button
+                    style={{
+                      ...(showGrid ? inactiveSegmentStyle : activeSegmentStyle),
+                      flexGrow: "1",
+                      minWidth: "100px",
+                      maxHeight: "40px",
+                      borderLeft: "2px solid #ccc",
+                      borderTop: "2px solid #ccc",
+                      borderBottom: "2px solid #ccc",
+                      borderTopLeftRadius: "10px",
+                      borderBottomLeftRadius: "10px",
+                    }}
+                    onClick={() => setShowGrid(false)}
+                  >
+                    Grid Off
+                  </button>
+                  <button
+                    style={{
+                      ...(showGrid ? activeSegmentStyle : inactiveSegmentStyle),
+                      flexGrow: "1",
+                      minWidth: "100px",
+                      maxHeight: "40px",
+                      borderRight: "2px solid #ccc",
+                      borderTop: "2px solid #ccc",
+                      borderBottom: "2px solid #ccc",
+                      borderTopRightRadius: "10px",
+                      borderBottomRightRadius: "10px",
+                    }}
+                    onClick={() => setShowGrid(true)}
+                  >
+                    Grid On
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "10px",
+                    padding: "10px",
+                    border: "1px solid #ccc",
+                    backgroundColor: "#f0f0f0",
+                    borderRadius: "4px",
+                    minWidth: "200px",
+                    alignSelf: "center",
+                  }}
+                >
+                  {selectedToken ? (
+                    <>
+                      <h4>Selected Token</h4>
+                      <p>
+                        <strong>Name:</strong>{" "}
+                        {selectedToken.label ?? "(no label)"}
+                      </p>
+                      <p>
+                        <strong>X:</strong> {selectedToken.x}
+                      </p>
+                      <p>
+                        <strong>Y:</strong> {selectedToken.y}
+                      </p>
+                      <p>
+                        <strong>Radius:</strong> {selectedToken.radius}
+                      </p>
+                      <button onClick={() => setSelectedToken(null)}>
+                        Close
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <h4>Selected Token</h4>
+                      <p
+                        style={{
+                          fontStyle: "italic",
+                          fontSize: "0.9rem",
+                          color: "#666",
+                          margin: 0,
+                        }}
+                      >
+                        Select a token to inspect it
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Column 2: Div for Session name, iteration name, map, prev and next buttons, and iteration # of # */}
+            <div
+              style={{
+                position: "relative",
                 flex: 1,
                 display: "flex",
                 flexDirection: "column",
-                //border: "1px solid #000",
                 alignItems: "center",
                 maxHeight: "calc(90vh - 5vh)",
-                //padding: "10px",
+                maxWidth: "calc(100vw - 50vw)",
               }}
             >
               {sessionName ? (
@@ -1474,20 +1646,18 @@ const ViewModal: React.FC<ViewModalProps> = ({
                       <div
                         style={{
                           position: "relative",
-                          width: `${canvasSize.width}px`,
+                          maxWidth: "calc(100vw - 50vw)",
                           height: `${canvasSize.height}px`,
                           display: "flex",
                           justifyContent: "center",
                           alignItems: "center",
                           overflow: "auto",
-                          border: "1px solid #ccc",
                         }}
                       >
                         {/* Scrollable container for map */}
                         <canvas
                           ref={canvasRef}
                           style={{
-                            border: "1px solid #ccc",
                             width: "100%",
                             height: "100%",
                             overflow: "auto",
@@ -1495,19 +1665,6 @@ const ViewModal: React.FC<ViewModalProps> = ({
                           }}
                         />
                       </div>
-
-                      {/*  <canvas
-                      ref={canvasRef}
-                      width={800}
-                      height={600}
-                      style={{
-                        maxWidth: "100%",
-                        height: "calc(100% - 40px)",
-                        objectFit: "contain",
-                      }}
-                    />
-
-                    */}
                     </>
                   ) : (
                     <p>Please select an iteration</p>
@@ -1520,115 +1677,110 @@ const ViewModal: React.FC<ViewModalProps> = ({
               {selectedIteration && (
                 <div
                   style={{
-                    //marginTop: "1rem",
                     display: "flex",
                     justifyContent: "center",
                     gap: "1rem",
                   }}
                 >
-                  <button onClick={goToPreviousIteration}>
-                    <span style={{ marginRight: "5px", fontSize: "30px" }}>
-                      &#8249;
-                    </span>
+                  <button
+                    style={{
+                      marginRight: "5px",
+                      border: "2px solid #ccc",
+                      padding: "3px",
+                    }}
+                    onClick={() => {
+                      goToPreviousIteration();
+                      setSelectedToken(null);
+                    }}
+                  >
+                    Prev
                   </button>
-                  <button onClick={goToNextIteration}>
-                    <span style={{ marginRight: "5px", fontSize: "30px" }}>
-                      &#8250;
-                    </span>
+
+                  <p
+                    style={{
+                      fontWeight: "bold",
+                      fontSize: "14px",
+                      margin: "10px 0",
+                    }}
+                  >
+                    Iteration {iterations.indexOf(selectedIteration) + 1} of{" "}
+                    {iterations.length}
+                  </p>
+
+                  <button
+                    style={{
+                      marginRight: "5px",
+                      border: "2px solid #ccc",
+                      padding: "3px",
+                    }}
+                    onClick={() => {
+                      goToNextIteration();
+                      setSelectedToken(null);
+                    }}
+                  >
+                    Next
                   </button>
                 </div>
               )}
             </div>
 
+            {/* Column 3: Div for right portion of screen */}
             <div
               style={{
-                marginTop: "1rem",
+                border: "2px solid #ccc",
+                maxWidth: "15em",
+                padding: "10px",
                 display: "flex",
                 flexDirection: "column",
+                justifyContent: "flex-start",
                 alignItems: "center",
-                border: "3px solid #ccc",
-                //gap: "12px",
+                alignSelf: "flex-start",
+                marginTop: "60px",
               }}
             >
-              <div style={{ display: "flex" }}>
-                <button
-                  style={{
-                    ...(playerView ? activeSegmentStyle : inactiveSegmentStyle),
-                    flexGrow: "1",
+              {/* Button that opens the movement graph */}
+              <button
+                onClick={() => setShowMovementModal(true)}
+                style={{
+                  cursor: "pointer",
+                  borderBottom: "1px solid #ccc",
+                  padding: "5px",
+                  maxWidth: "13em",
+                  minWidth: "13em",
+                }}
+              >
+                Open Movement Graph
+              </button>
 
-                    minWidth: "100px",
-                    maxHeight: "40px",
-                    borderLeft: "2px solid #ccc",
-                    borderTop: "2px solid #ccc",
-                    borderBottom: "2px solid #ccc",
-                    borderTopLeftRadius: "10px",
-                    borderBottomLeftRadius: "10px",
-                  }}
-                  onClick={() => setPlayerView(true)}
-                >
-                  Player View
-                </button>
-                <button
-                  style={{
-                    ...(playerView ? inactiveSegmentStyle : activeSegmentStyle),
-                    flexGrow: "1",
-                    minWidth: "100px",
-                    maxHeight: "40px",
-                    borderRight: "2px solid #ccc",
-                    borderTop: "2px solid #ccc",
-                    borderBottom: "2px solid #ccc",
-                    borderTopRightRadius: "10px",
-                    borderBottomRightRadius: "10px",
-                  }}
-                  onClick={() => setPlayerView(false)}
-                >
-                  DM View
-                </button>
-              </div>
-              <div style={{ display: "flex" }}>
-                <button
-                  style={{
-                    ...(showGrid ? inactiveSegmentStyle : activeSegmentStyle),
-                    flexGrow: "1",
-                    minWidth: "100px",
-                    maxHeight: "40px",
-                    borderLeft: "2px solid #ccc",
-                    borderTop: "2px solid #ccc",
-                    borderBottom: "2px solid #ccc",
-                    borderTopLeftRadius: "10px",
-                    borderBottomLeftRadius: "10px",
-                  }}
-                  onClick={() => setShowGrid(false)}
-                >
-                  Grid Off
-                </button>
-                <button
-                  style={{
-                    ...(showGrid ? activeSegmentStyle : inactiveSegmentStyle),
-                    flexGrow: "1",
-                    minWidth: "100px",
-                    maxHeight: "40px",
-                    borderRight: "2px solid #ccc",
-                    borderTop: "2px solid #ccc",
-                    borderBottom: "2px solid #ccc",
-                    borderTopRightRadius: "10px",
-                    borderBottomRightRadius: "10px",
-                  }}
-                  onClick={() => setShowGrid(true)}
-                >
-                  Grid On
-                </button>
-              </div>
+              {/* Button that opens herd graph */}
+              <button
+                onClick={() => setShowHerdModal(true)}
+                style={{
+                  cursor: "pointer",
+                  borderBottom: "1px solid #ccc",
+                  padding: "5px",
+                  maxWidth: "13em",
+                  minWidth: "13em",
+                }}
+              >
+                Open Herd Graph
+              </button>
+
+              {/* Button that opens the whiteboard iterations */}
+              <button
+                onClick={() => setShowWhiteboardModal(true)}
+                style={{
+                  cursor: "pointer",
+                  padding: "5px",
+                  maxWidth: "13em",
+                  minWidth: "13em",
+                }}
+              >
+                Open Whiteboard Iterations
+              </button>
             </div>
-
-            {/* HERE */}
           </div>
         </div>
-        {/*
-        <button onClick={onClose} style={viewCloseButtonStyle}>
-          Close
-        </button>
-        */}
       </div>
 
       {showDownloadModal && (
@@ -1708,7 +1860,7 @@ const ClearModal: React.FC<ClearModalProps> = ({
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 1000,
+    zIndex: 1000000001,
   };
 
   const modalStyle: React.CSSProperties = {
@@ -1718,6 +1870,7 @@ const ClearModal: React.FC<ClearModalProps> = ({
     maxWidth: "400px",
     width: "90%",
     textAlign: "center",
+    zIndex: 1000000001,
   };
 
   const buttonStyle: React.CSSProperties = {
@@ -3295,16 +3448,17 @@ const modalStyle: React.CSSProperties = {
   background: "white",
   padding: "20px",
   borderRadius: "8px",
-  width: "80%", // Set the width to 80% of the viewport width
-  maxWidth: "800px", // Maximum width to avoid going beyond the screen
-  overflowY: "auto", // Allow scrolling if content is too long
-  wordWrap: "break-word", // Allow long words to break and wrap to the next line
-  whiteSpace: "normal", // Ensure text does not overflow on a single line
+  width: "80%",
+  maxWidth: "800px",
+  overflowY: "auto",
+  wordWrap: "break-word",
+  whiteSpace: "normal",
+  zIndex: 1000000001,
 };
 
 const listContainerStyle: React.CSSProperties = {
-  maxHeight: "400px", // Set a max height for the list container
-  overflowY: "auto", // Enable scrolling within the list container
+  maxHeight: "400px",
+  overflowY: "auto",
   marginBottom: "10px",
 };
 
@@ -3319,12 +3473,12 @@ const buttonStyle: React.CSSProperties = {
 const sessionItemStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between", // Space between item text and buttons
+  justifyContent: "space-between",
   marginBottom: "12px",
   padding: "8px",
   borderBottom: "1px solid #ddd",
-  wordWrap: "break-word", // Allow text to wrap
-  whiteSpace: "normal", // Allow text to wrap to the next line
+  wordWrap: "break-word",
+  whiteSpace: "normal",
 };
 
 const smallButtonStyle: React.CSSProperties = {
@@ -3344,10 +3498,6 @@ const viewCloseButtonStyle: React.CSSProperties = {
   bottom: "20px",
   left: "50%",
   transform: "translateX(-50%)",
-  //right: "10px",
-  //padding: "5px 10px",
-  //marginTop: "20px",
-  //padding: "10px 15px",
   cursor: "pointer",
 };
 
